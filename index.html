@@ -64,9 +64,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .field.full{grid-column:1 / -1}
 .field label,.field .lbl{font-size:13px;font-weight:600;color:var(--text-2)}
 .field small{font-size:12px;color:var(--muted)}
-.field input[type=date]{-webkit-appearance:none;appearance:none;display:block;max-width:100%;text-align:left;line-height:26px}
+.date-box{position:relative;display:block;width:100%;min-width:0;overflow:hidden;border-radius:11px;border:1px solid var(--border);background:var(--surface-2)}
+.date-box .date-ic{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none}
+.field .date-box input[type=date]{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:100%;min-width:0;border:0;border-radius:0;background:transparent;text-align:left;line-height:26px;padding-right:40px}
+.field input[type=date]::-webkit-calendar-picker-indicator{opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
 .field input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
-.field input[type=date]::-webkit-calendar-picker-indicator{margin:0}
 .field input,.field select{min-height:44px;padding:8px 12px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font:inherit;font-size:16px;min-width:0;width:100%}
 .choice{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border)}
 .choice label{flex:1;position:relative;cursor:pointer}
@@ -178,6 +180,69 @@ button.brand{background:none;border:0;padding:0;color:inherit;cursor:pointer;tex
 .feat b{color:var(--text);font-size:15px;margin-top:6px}
 .feat .ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;background:var(--c)}
 @media (max-width:720px){.home{padding:22px 16px}.home h1{font-size:27px}.home-feats{grid-template-columns:1fr}.home-cta .btn{flex:1 1 100%}}
+.date-box:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.install{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1px solid var(--border);background:var(--surface);cursor:pointer;width:100%;text-align:left;color:var(--text);font:inherit}
+.install:hover{background:var(--surface-2)}
+.install .ii{flex:none;width:38px;height:38px;border-radius:10px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent-ink)}
+.install .ii svg{width:20px;height:20px}
+.install b{display:block;font-size:15px}.install span span{font-size:13px;color:var(--muted)}
+.install .go{margin-left:auto;color:var(--muted);font-size:20px}
+.tuto-bg{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0}}
+.tuto{width:100%;max-width:440px;max-height:100dvh;overflow:auto;background:var(--surface);border-radius:20px 20px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px}
+@media (min-width:600px){.tuto-bg{align-items:center}.tuto{border-radius:20px}}
+.tuto-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tuto-top b{font-family:var(--f-display);font-size:17px}
+.tuto-x{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:18px;cursor:pointer}
+.slides{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;gap:0;-webkit-overflow-scrolling:touch}
+.slides::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;padding:4px 2px}
+.slide h3{font-size:17px;text-align:center}
+.slide p{margin:0;font-size:14px;color:var(--text-2);text-align:center;max-width:34ch}
+.step-n{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-ink)}
+.ph{width:200px;height:300px;border-radius:30px;background:#111;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);flex:none}
+.ph-s{position:relative;width:100%;height:100%;border-radius:23px;overflow:hidden;background:#f4f4f6;color:#111;font-family:-apple-system,system-ui,sans-serif;font-size:10px}
+.ph-s.dark{background:#1c1c1e;color:#fff}
+.pg{padding:26px 12px 0;display:flex;flex-direction:column;gap:6px}
+.pg .row{display:flex;align-items:center;gap:6px;font-weight:700;font-size:11px}
+.pg .lg{width:18px;height:18px;border-radius:5px;background:#d9541c;color:#fff;font-size:8px;display:grid;place-items:center}
+.pg i{display:block;height:7px;border-radius:4px;background:#dcdce1}
+.pg .cta{height:20px;border-radius:7px;background:#d9541c;margin-top:4px}
+.sbar{position:absolute;left:8px;right:8px;bottom:10px;display:flex;align-items:center;gap:6px}
+.sbar .url{flex:1;height:26px;border-radius:13px;background:rgba(255,255,255,.95);box-shadow:0 1px 6px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;font-size:8px;color:#333;gap:3px;white-space:nowrap;overflow:hidden;min-width:0}
+.sbar .b{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.95);box-shadow:0 1px 6px rgba(0,0,0,.15);display:grid;place-items:center;font-size:11px;color:#1a73e8;font-weight:700}
+.sbar .b svg,.sheet svg,.menu svg{width:13px;height:13px;flex:none}
+.hl{position:relative;z-index:1;outline:2.5px solid #d9541c;outline-offset:2px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{outline-offset:5px;outline-color:rgba(217,84,28,.45)}}
+.finger{position:absolute;width:22px;height:22px;border-radius:50%;background:rgba(217,84,28,.35);border:2px solid #d9541c;pointer-events:none;animation:tap 1.4s ease-in-out infinite;z-index:2}
+@keyframes tap{50%{transform:scale(.7)}}
+.menu{position:absolute;right:8px;bottom:44px;width:120px;background:rgba(255,255,255,.97);border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.2);overflow:hidden}
+.menu div{padding:7px 10px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;font-size:9.5px}
+.menu div:last-child{border:0}
+.sheet{position:absolute;left:0;right:0;bottom:0;top:70px;background:#f2f2f7;border-radius:14px 14px 0 0;padding:10px 8px;display:flex;flex-direction:column;gap:6px}
+.sheet .sh-h{display:flex;align-items:center;gap:6px;background:#fff;border-radius:9px;padding:6px}
+.sheet .grp{background:#fff;border-radius:9px;overflow:hidden}
+.sheet .grp div{display:flex;justify-content:space-between;align-items:center;padding:7px 9px;border-bottom:1px solid #eee;font-size:9.5px}
+.sheet .grp div:last-child{border:0}
+.add-h{display:flex;justify-content:space-between;align-items:center;padding:24px 10px 8px;font-size:9.5px;font-weight:600}
+.add-h .blue{color:#1a73e8}
+.add-card{margin:8px 10px;background:#fff;border-radius:10px;padding:8px;display:flex;gap:8px;align-items:center}
+.add-card img{width:34px;height:34px;border-radius:8px}
+.add-card .t{display:flex;flex-direction:column;gap:2px;font-size:10px}
+.add-card .t small{color:#888;font-size:8px}
+.tgl{margin:0 10px;background:#fff;border-radius:10px;padding:8px;display:flex;justify-content:space-between;align-items:center;font-size:9.5px}
+.tgl i{width:26px;height:15px;border-radius:8px;background:#34c759;position:relative}
+.tgl i::after{content:"";position:absolute;right:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#fff}
+.home-scr{position:absolute;inset:0;background:linear-gradient(160deg,#3b5bdb,#d9541c);padding:30px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px 8px;align-content:start}
+.app-i{display:flex;flex-direction:column;align-items:center;gap:3px;color:#fff;font-size:7px}
+.app-i span{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.3)}
+.app-i img{width:34px;height:34px;border-radius:9px}
+.dots{display:flex;justify-content:center;gap:6px}
+.dots button{width:8px;height:8px;border-radius:50%;border:0;padding:0;background:var(--border);cursor:pointer}
+.dots button.on{background:var(--accent);width:20px;border-radius:4px}
+.tuto-nav{display:flex;gap:8px}
+.tuto-nav .btn{flex:1}
+.tuto .note{text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -424,7 +489,7 @@ app.innerHTML = `
 <p class="sub" style="margin-top:6px">Huit questions. Le plan se calcule tout seul, puis s'ajuste chaque semaine à tes ressentis.</p>
 <form id="setup" class="form" novalidate>
 <div class="field full"><span class="lbl">Distance</span><div class="choice">${Object.entries(DIST).map(([k, d]) => `<label><input type="radio" name="dist" value="${k}" ${c.dist === k ? 'checked' : ''}><span>${d.label}</span></label>`).join('')}</div></div>
-<div class="field"><label for="f-date">Date de la course</label><input id="f-date" name="raceDate" type="date" value="${c.raceDate}" required><small>Entre 6 et 30 semaines</small></div>
+<div class="field"><label for="f-date">Date de la course</label><span class="date-box"><input id="f-date" name="raceDate" type="date" value="${c.raceDate}" required><span class="date-ic" aria-hidden="true">📅</span></span><small>Entre 6 et 30 semaines</small></div>
 <div class="field"><label for="f-goal">Temps visé</label><input id="f-goal" name="goal" type="text" autocomplete="off" placeholder="1:55:00" value="${isFinite(c.goal) ? fmtDur(c.goal) : ''}"><small>h:mm:ss ou mm:ss</small></div>
 <div class="field full"><span class="lbl">Ton meilleur chrono récent</span><div class="choice">${Object.entries(REF).map(([k, r]) => `<label><input type="radio" name="refDist" value="${k}" ${(c.refDist || '10k') === k ? 'checked' : ''}><span>${r[1]}</span></label>`).join('')}</div>
 <input id="f-ref" name="refTime" type="text" autocomplete="off" aria-label="Temps réalisé" placeholder="52:30" value="${isFinite(c.refTime ?? c.ref10k) ? fmtDur(c.refTime ?? c.ref10k) : ''}"><small>Une course ou un test couru à fond dans les 2 derniers mois, sur la distance de ton choix. Pas de chrono ? Mets ton estimation honnête. Il sert à calculer toutes tes allures.</small></div>
@@ -550,17 +615,63 @@ ${body}`;
 app._plan = plan;
 }
 
+
+const SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+const PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>';
+const pageMock = '<div class="pg"><div class="row"><span class="lg">PB</span>Prépa Builder</div><i style="width:90%;height:12px;background:#c9c9cf"></i><i style="width:70%"></i><i style="width:85%"></i><span class="cta"></span><i style="width:60%;margin-top:6px"></i><i style="width:80%"></i></div>';
+const sbar = (hl) => `<div class="sbar"><span class="b">‹</span><span class="url">🔒 julesjg8.github.io</span><span class="b ${hl === 'share' ? 'hl' : ''}">${SHARE}</span><span class="b ${hl === 'more' ? 'hl' : ''}">•••</span></div>`;
+const SLIDES = [
+['Ouvre le lien dans Safari', 'Pas dans Gmail ni Instagram : si le lien s\'ouvre dans une app, touche l\'icône boussole ou « Ouvrir dans Safari ».',
+`<div class="ph-s">${pageMock}${sbar('')}</div>`],
+['Touche le bouton Partager', 'Le carré avec une flèche vers le haut. Si tu ne le vois pas, touche « ••• » en bas à droite, puis « Partager ».',
+`<div class="ph-s">${pageMock}${sbar('more')}<div class="menu"><div class="hl">Partager ${SHARE}</div><div>Ajouter aux favoris ☆</div><div>Nouvel onglet ＋</div></div></div>`],
+['Touche « Sur l\'écran d\'accueil »', 'Fais défiler la liste vers le bas. Si l\'option n\'apparaît pas, touche « Afficher plus ».',
+`<div class="ph-s">${pageMock}<div class="sheet"><div class="sh-h"><span class="lg" style="width:20px;height:20px;border-radius:5px;background:#d9541c;color:#fff;font-size:8px;display:grid;place-items:center">PB</span><b style="font-size:10px">Prépa Builder</b></div><div class="grp"><div>Copier <span>⧉</span></div><div>Ajouter à la liste de lecture <span>👓</span></div><div class="hl">Sur l'écran d'accueil ${PLUS}</div><div>Ajouter aux favoris <span>☆</span></div></div></div></div>`],
+['Touche « Ajouter »', 'En haut à droite. Laisse « Ouvrir comme app web » activé : Prépa Builder s\'ouvrira en plein écran, comme une vraie app.',
+`<div class="ph-s"><div class="add-h"><span class="blue">Annuler</span><span>Écran d'accueil</span><span class="blue hl" style="border-radius:4px;padding:0 2px">Ajouter</span></div><div class="add-card"><img src="icon-180.png" alt=""><span class="t"><b>Prépa Builder</b><small>julesjg8.github.io</small></span></div><div class="tgl">Ouvrir comme app web<i></i></div></div>`],
+['Ouvre l\'app depuis l\'icône', 'Crée ton plan depuis l\'icône (pas depuis Safari) : c\'est là qu\'il sera enregistré et retrouvé à chaque ouverture.',
+`<div class="ph-s"><div class="home-scr">${Array.from({ length: 9 }, () => '<span class="app-i"><span></span></span>').join('')}<span class="app-i"><img class="hl" src="icon-180.png" alt="">Prépa Builder</span></div></div>`]
+];
+let tutoEl = null;
+function openTuto() {
+const bg = document.createElement('div');
+bg.className = 'tuto-bg';
+bg.innerHTML = `<div class="tuto" role="dialog" aria-modal="true" aria-label="Ajouter à l'écran d'accueil">
+<div class="tuto-top"><b>Installer sur iPhone</b><button type="button" class="tuto-x" data-tx aria-label="Fermer">×</button></div>
+<div class="slides">${SLIDES.map(([h, txt, mock], i) => `<div class="slide"><span class="step-n">Étape ${i + 1} sur ${SLIDES.length}</span><div class="ph">${mock}</div><h3>${h}</h3><p>${txt}</p></div>`).join('')}</div>
+<div class="dots">${SLIDES.map((_, i) => `<button type="button" data-dot="${i}" aria-label="Étape ${i + 1}" class="${i ? '' : 'on'}"></button>`).join('')}</div>
+<div class="tuto-nav"><button type="button" class="btn" data-prev>Précédent</button><button type="button" class="btn primary" data-next>Suivant</button></div>
+<p class="note">Sur Android (Chrome) : menu ⋮ en haut à droite, puis « Ajouter à l'écran d'accueil ».</p>
+</div>`;
+document.body.appendChild(bg); tutoEl = bg; document.body.style.overflow = 'hidden';
+const sl = bg.querySelector('.slides'), dots = [...bg.querySelectorAll('[data-dot]')], prev = bg.querySelector('[data-prev]'), next = bg.querySelector('[data-next]');
+const idx = () => Math.round(sl.scrollLeft / sl.clientWidth);
+const go = (i) => sl.scrollTo({ left: i * sl.clientWidth, behavior: 'smooth' });
+const sync = () => { const i = idx(); dots.forEach((d, j) => d.classList.toggle('on', j === i)); prev.disabled = i === 0; next.textContent = i === SLIDES.length - 1 ? 'C\'est fait !' : 'Suivant'; };
+sl.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true }); sync();
+const close = () => { bg.remove(); tutoEl = null; document.body.style.overflow = ''; };
+bg.addEventListener('click', (e) => {
+if (e.target === bg || e.target.closest('[data-tx]')) return close();
+const d = e.target.closest('[data-dot]'); if (d) return go(Number(d.dataset.dot));
+if (e.target.closest('[data-prev]')) return go(idx() - 1);
+if (e.target.closest('[data-next]')) return idx() === SLIDES.length - 1 ? close() : go(idx() + 1);
+});
+document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape' && tutoEl) { close(); document.removeEventListener('keydown', esc); } });
+}
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 function renderHome() {
 const saved = Object.entries(plans);
 app.innerHTML = `
 <section class="card home">
-<div class="eyebrow">Course à pied · 5 km au marathon</div>
+<div class="eyebrow">Course à pied · 10 km, semi, marathon</div>
 <h1>Ton plan d'entraînement sur mesure, en 2 minutes</h1>
 <p class="home-sub">Réponds à quelques questions sur ta course et ton niveau : le plan se construit semaine par semaine, avec des allures calculées pour toi, et s'ajuste ensuite à tes ressentis.</p>
 <div class="home-cta"><button type="button" class="btn primary lg" data-go="new">Créer mon plan d'entraînement</button>
 ${saved.length ? `<button type="button" class="btn" data-open="${cur}">Reprendre mon plan</button>` : '<button type="button" class="btn" data-go="example">Voir un exemple</button>'}</div>
 <p class="note">Gratuit, sans compte. Ton plan reste enregistré sur cet appareil.</p>
 </section>
+${standalone ? '' : `<button type="button" class="install" data-go="tuto"><span class="ii">${PLUS}</span><span><b>${isIOS ? 'Installe-la sur ton iPhone' : 'Installer sur l\'écran d\'accueil'}</b><span>Tuto en 5 étapes : l'app s'ouvre comme une vraie, et ton plan reste enregistré.</span></span><span class="go">›</span></button>`}
 <section class="home-feats">
 <div class="feat"><span class="ic" style="--c:var(--t-quality)">1</span><b>Tes allures</b><span>Calculées à partir d'un chrono récent : footing, seuil, fractionné, allure course.</span></div>
 <div class="feat"><span class="ic" style="--c:var(--t-long)">2</span><b>Ton calendrier</b><span>De 2 à 6 sorties par semaine, la sortie longue le jour de ton choix, jusqu'au jour J.</span></div>
@@ -583,6 +694,7 @@ if (d.goto) { const plan = app._plan, w = plan.weeks.find((x) => x.sessions.some
 if (d.go === 'new') { view = 'new'; render(); window.scrollTo(0, 0); return; }
 if (d.go === 'edit') { view = 'edit'; render(); window.scrollTo(0, 0); return; }
 if (d.go === 'plan') { view = 'plan'; render(); return; }
+if (d.go === 'tuto') { openTuto(); return; }
 if (d.go === 'home') { view = 'home'; render(); window.scrollTo(0, 0); return; }
 if (d.go === 'example') { makeExample(); save(); view = 'plan'; sub = 'week'; weekIdx = monthIdx = null; render(); window.scrollTo(0, 0); return; }
 if (d.open) { cur = d.open; save(); view = 'plan'; sub = 'week'; weekIdx = monthIdx = null; render(); window.scrollTo(0, 0); return; }

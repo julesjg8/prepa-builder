@@ -1,6 +1,6 @@
 # Prépa Builder
 
-Générateur de plans d'entraînement course à pied (5 km → marathon) : allures, phases, calendrier et auto-régulation selon tes ressentis.
+Générateur de plans d'entraînement course à pied (10 km, semi-marathon, marathon) : allures, phases, calendrier et auto-régulation selon tes ressentis.
 
 Démo : https://julesjg8.github.io/prepa-builder/
 
