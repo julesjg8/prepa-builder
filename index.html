@@ -164,11 +164,22 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .pace small{display:block;font-size:12px;color:var(--text-2);margin-top:2px}
 .how{margin-top:18px;font-size:14px;color:var(--text-2);border-top:1px solid var(--grid);padding-top:14px}.how summary{cursor:pointer;font-weight:600;color:var(--text)}.how ul{margin:10px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:8px}.how b{color:var(--text)}
 @media (max-width:720px){.hero,.form{grid-template-columns:1fr}.hero h1{font-size:24px}.kv b{font-size:24px}.wkr{grid-template-columns:34px minmax(0,1fr) auto}.vol .bar{display:none}}
+button.brand{background:none;border:0;padding:0;color:inherit;cursor:pointer;text-align:left}
+.home{padding:28px 22px;background:linear-gradient(140deg,var(--accent-soft),var(--surface) 65%)}
+.home h1{font-size:34px;line-height:1.1;margin-top:10px;max-width:16ch}
+.home-sub{color:var(--text-2);font-size:16px;margin-top:12px;max-width:52ch}
+.home-cta{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 12px}
+.btn.lg{min-height:52px;padding:10px 22px;font-size:16px;border-radius:13px}
+.home-feats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.feat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--text-2)}
+.feat b{color:var(--text);font-size:15px;margin-top:6px}
+.feat .ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;background:var(--c)}
+@media (max-width:720px){.home{padding:22px 16px}.home h1{font-size:27px}.home-feats{grid-template-columns:1fr}.home-cta .btn{flex:1 1 100%}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
 <header class="top"><div class="top-in">
-<div class="brand"><span class="logo">PB</span><span>Prépa Builder</span></div>
+<button type="button" class="brand" id="homeBtn" aria-label="Accueil"><span class="logo">PB</span><span>Prépa Builder</span></button>
 <button type="button" class="btn sm" id="newBtn">Nouveau plan</button>
 </div></header>
 <main class="wrap" id="app"></main>
@@ -362,19 +373,20 @@ return { weeks, P, rp, D, raceDate, maxLong, phases: ['base', 'build', 'peak', '
 let plans = store.get('pb.plans', null);
 let cur = store.get('pb.cur', null);
 const sundayIn = (weeks) => addDays(monday(today), weeks * 7 + 6);
-if (!plans || !Object.keys(plans).length) {
+if (!plans) plans = {};
+const makeExample = () => {
 const cfg = { name: 'Semi de printemps', dist: 'semi', raceDate: key(sundayIn(13)), goal: parseTime('1:55:00'), ref10k: parseTime('52:30'), refDist: '10k', refTime: parseTime('52:30'), weekKm: 25, runs: 3, longDay: 6, startLong: 10, start: key(addDays(monday(today), -14)) };
 const fb = {};
 const p0 = buildPlan(cfg, {});
 const pattern = ['bien', 'facile', 'facile', 'bien', 'dur', 'bien'];
 let i = 0;
 p0.weeks.forEach((w) => w.sessions.forEach((s) => { if (s.date < today && i < 12) fb[s.id] = pattern[i++ % pattern.length]; }));
-plans = { exemple: { cfg, fb, example: true } };
+plans.exemple = { cfg, fb, example: true };
 cur = 'exemple';
-}
-if (!plans[cur]) cur = Object.keys(plans)[0];
+};
+if (!plans[cur]) cur = Object.keys(plans)[0] || null;
 const save = () => { store.set('pb.plans', plans); store.set('pb.cur', cur); };
-let view = 'plan', sub = 'week', weekIdx = null, monthIdx = null, openSteps = new Set();
+let view = cur ? 'plan' : 'home', sub = 'week', weekIdx = null, monthIdx = null, openSteps = new Set();
 const app = document.getElementById('app');
 
 // ---------- rendering ----------
@@ -418,7 +430,7 @@ app.innerHTML = `
 <div class="field"><label for="f-day">Jour de la sortie longue</label><select id="f-day" name="longDay">${DOWS.map((d, i) => `<option value="${i}" ${c.longDay === i ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
 <div class="field full"><label for="f-name">Nom du plan</label><input id="f-name" name="pname" type="text" placeholder="Semi de Paris" value="${esc(c.name || '')}"></div>
 </form>
-<div class="form-foot"><button type="submit" form="setup" class="btn primary">${edit ? 'Recalculer le plan' : 'Générer mon plan'}</button>${saved.length ? '<button type="button" class="btn" data-go="plan">Annuler</button>' : ''}<span class="err" id="err" role="alert"></span></div>
+<div class="form-foot"><button type="submit" form="setup" class="btn primary">${edit ? 'Recalculer le plan' : 'Générer mon plan'}</button>${saved.length ? '<button type="button" class="btn" data-go="plan">Annuler</button>' : '<button type="button" class="btn" data-go="home">Retour</button>'}<span class="err" id="err" role="alert"></span></div>
 ${edit ? '<p class="note" style="margin-top:10px">Tes ressentis déjà notés sont conservés.</p>' : ''}
 <details class="how"><summary>Comment le plan est construit</summary>
 <ul>
@@ -534,7 +546,24 @@ ${body}`;
 app._plan = plan;
 }
 
-function render() { if (view === 'plan' && plans[cur]) renderPlan(); else renderSetup(view === 'edit'); }
+function renderHome() {
+const saved = Object.entries(plans);
+app.innerHTML = `
+<section class="card home">
+<div class="eyebrow">Course à pied · 5 km au marathon</div>
+<h1>Ton plan d'entraînement sur mesure, en 2 minutes</h1>
+<p class="home-sub">Réponds à quelques questions sur ta course et ton niveau : le plan se construit semaine par semaine, avec des allures calculées pour toi, et s'ajuste ensuite à tes ressentis.</p>
+<div class="home-cta"><button type="button" class="btn primary lg" data-go="new">Créer mon plan d'entraînement</button>
+${saved.length ? `<button type="button" class="btn" data-open="${cur}">Reprendre mon plan</button>` : '<button type="button" class="btn" data-go="example">Voir un exemple</button>'}</div>
+<p class="note">Gratuit, sans compte. Ton plan reste enregistré sur cet appareil.</p>
+</section>
+<section class="home-feats">
+<div class="feat"><span class="ic" style="--c:var(--t-quality)">1</span><b>Tes allures</b><span>Calculées à partir d'un chrono récent : footing, seuil, fractionné, allure course.</span></div>
+<div class="feat"><span class="ic" style="--c:var(--t-long)">2</span><b>Ton calendrier</b><span>De 2 à 6 sorties par semaine, la sortie longue le jour de ton choix, jusqu'au jour J.</span></div>
+<div class="feat"><span class="ic" style="--c:var(--t-easy)">3</span><b>Un plan qui s'adapte</b><span>Note chaque séance (facile, dur, ratée…) : la semaine suivante s'allège ou se durcit.</span></div>
+</section>`;
+}
+function render() { if (view === 'home' || !plans[cur] && view === 'plan') renderHome(); else if (view === 'plan') renderPlan(); else renderSetup(view === 'edit'); }
 
 app.addEventListener('click', (e) => {
 const t = e.target.closest('button');
@@ -550,9 +579,12 @@ if (d.goto) { const plan = app._plan, w = plan.weeks.find((x) => x.sessions.some
 if (d.go === 'new') { view = 'new'; render(); window.scrollTo(0, 0); return; }
 if (d.go === 'edit') { view = 'edit'; render(); window.scrollTo(0, 0); return; }
 if (d.go === 'plan') { view = 'plan'; render(); return; }
+if (d.go === 'home') { view = 'home'; render(); window.scrollTo(0, 0); return; }
+if (d.go === 'example') { makeExample(); save(); view = 'plan'; sub = 'week'; weekIdx = monthIdx = null; render(); window.scrollTo(0, 0); return; }
 if (d.open) { cur = d.open; save(); view = 'plan'; sub = 'week'; weekIdx = monthIdx = null; render(); window.scrollTo(0, 0); return; }
-if (d.del) { if (t.dataset.confirm) { delete plans[d.del]; if (cur === d.del) cur = Object.keys(plans)[0] || null; save(); render(); } else { t.dataset.confirm = '1'; t.textContent = 'Confirmer ?'; } }
+if (d.del) { if (t.dataset.confirm) { delete plans[d.del]; if (cur === d.del) cur = Object.keys(plans)[0] || null; save(); if (!cur) view = 'home'; render(); } else { t.dataset.confirm = '1'; t.textContent = 'Confirmer ?'; } }
 });
+document.getElementById('homeBtn').addEventListener('click', () => { view = 'home'; render(); window.scrollTo(0, 0); });
 document.getElementById('newBtn').addEventListener('click', () => { view = 'new'; render(); window.scrollTo(0, 0); });
 render();
 })();
