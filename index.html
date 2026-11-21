@@ -259,6 +259,8 @@ button.brand{background:none;border:0;padding:0;color:inherit;cursor:pointer;tex
 .rec-list{display:grid;margin:12px 0}.rec{display:grid;grid-template-columns:minmax(0,7em) auto 1fr auto;gap:4px 12px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--grid)}.rec b{font-size:16px}.rec-x{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0 4px}
 @media (max-width:520px){.rec{grid-template-columns:1fr auto auto}.rec .note{grid-column:1/-1;grid-row:2}}
 .rec-add{display:flex;flex-wrap:wrap;gap:8px}.rec-add select,.rec-add input{min-height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:0 10px;font:inherit;font-size:14px}.rec-add input[type=text]{width:7em}.rec-msg.err{color:var(--bad)}
+.mv-acts{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.mv-out{margin:8px 0;padding:10px 12px;border-radius:10px;background:var(--accent-soft);font-size:13px}.mv-out p{margin:0 0 6px}
+.mv-removed{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:10px;font-size:13px;color:var(--text-2)}
 .linkbtn{background:none;border:0;padding:0;color:var(--accent-ink);font:inherit;text-decoration:underline;cursor:pointer}
 </style>
 
@@ -399,6 +401,81 @@ button.brand{background:none;border:0;padding:0;color:inherit;cursor:pointer;tex
     render();
   };
   window.Course = { mount: mount, parse: parse, stats: stats };
+})();
+</script>
+<script>
+// Déplacer une séance : recalcule la semaine pour garder au moins 48 h entre deux séances dures
+// (qualité, sortie longue, test). Les autres séances glissent en cascade, de préférence plus tard dans la semaine.
+// Même code dans Prépa Moorea et Prépa Builder.
+(function () {
+  'use strict';
+  var DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+  var GAP = 2; // jours entre deux séances dures
+
+  // Jours candidats autour de "day" : le jour même, puis plus tard, puis plus tôt.
+  var around = function (day, minDay) {
+    var out = [day];
+    for (var k = 1; k < 7; k++) { out.push(day + k); out.push(day - k); }
+    return out.filter(function (d) { return d >= minDay && d <= 6; });
+  };
+  var free = function (placed, d) { return !placed.some(function (p) { return p.day === d; }); };
+  var spaced = function (placed, d, hard) { return !hard || !placed.some(function (p) { return p.hard && Math.abs(p.day - d) < GAP; }); };
+  var nearHard = function (placed, d, self) { return placed.filter(function (p) { return p.hard && p.id !== self && Math.abs(p.day - d) < GAP; })[0]; };
+
+  // items : [{ id, day (0-6), hard, fixed, label }]. Retourne les nouveaux jours et les problèmes.
+  var place = function (items, moverId, to, minDay) {
+    var placed = items.filter(function (x) { return x.fixed && x.id !== moverId; }).map(function (x) { return { id: x.id, day: x.day, hard: x.hard, label: x.label }; });
+    var mover = items.filter(function (x) { return x.id === moverId; })[0];
+    var res = {}, tooClose = [], noRoom = [];
+    var mp = { id: mover.id, day: to, hard: mover.hard, label: mover.label };
+    var near = mover.hard && nearHard(placed, to, mover.id);
+    if (near) tooClose.push({ item: mover, day: to, near: near });
+    placed.push(mp); res[mover.id] = to;
+    items.filter(function (x) { return !x.fixed && x.id !== moverId; }).sort(function (a, b) { return a.day - b.day; }).forEach(function (x) {
+      var c = around(x.day, minDay);
+      var d = c.filter(function (k) { return free(placed, k) && spaced(placed, k, x.hard); })[0];
+      if (d == null) {
+        var d2 = c.filter(function (k) { return free(placed, k); })[0];
+        if (d2 == null) { noRoom.push({ item: x }); return; }
+        tooClose.push({ item: x, day: d2, near: nearHard(placed, d2, x.id) });
+        d = d2;
+      }
+      placed.push({ id: x.id, day: d, hard: x.hard, label: x.label }); res[x.id] = d;
+    });
+    var changes = items.filter(function (x) { return x.id !== moverId && res[x.id] != null && res[x.id] !== x.day; })
+      .map(function (x) { return { item: x, from: x.day, to: res[x.id] }; });
+    return { res: res, changes: changes, tooClose: tooClose, noRoom: noRoom };
+  };
+
+  // Où caser une séance dans une autre semaine (pour « semaine prochaine ») : même jour si possible.
+  var slot = function (items, day, hard, minDay) {
+    var c = around(day, minDay || 0);
+    var d = c.filter(function (k) { return free(items, k) && spaced(items, k, hard); })[0];
+    if (d != null) return { day: d, close: false };
+    d = c.filter(function (k) { return free(items, k); })[0];
+    return d != null ? { day: d, close: true } : null;
+  };
+
+  var esc = function (x) { return String(x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  // Texte et boutons de la proposition. Les boutons portent data-mvact.
+  var html = function (r, moverLabel, to) {
+    var b = function (act, label, primary) { return '<button type="button" class="btn sm' + (primary ? ' primary' : '') + '" data-mvact="' + act + '">' + label + '</button>'; };
+    var pb = r.noRoom[0] || r.tooClose[0];
+    if (pb) {
+      var who = '<b>' + esc(pb.item.label) + '</b>';
+      var txt = r.noRoom[0] ? 'Plus aucun jour libre cette semaine pour ' + who + '.'
+        : who + ' (' + DAYS[pb.day] + ') serait à moins de 48 h de <b>' + esc(pb.near ? pb.near.label : 'une autre séance dure') + '</b>. Trop proche pour bien récupérer.';
+      return '<p>' + txt + ' Que veux-tu faire ?</p><div class="mv-acts">' +
+        b('next', esc(pb.item.label) + ' à la semaine prochaine', true) + b('remove', 'Supprimer : ' + esc(pb.item.label.toLowerCase())) +
+        (r.noRoom[0] ? '' : b('keep', 'Garder quand même')) + b('cancel', 'Annuler') + '</div>';
+    }
+    if (!r.changes.length) return '';
+    return '<p>' + esc(moverLabel) + ' → <b>' + DAYS[to] + '</b>. Pour garder 48 h entre les séances dures : ' +
+      r.changes.map(function (c) { return '<b>' + esc(c.item.label) + '</b> ' + DAYS[c.from] + ' → ' + DAYS[c.to]; }).join(', ') + '.</p>' +
+      '<div class="mv-acts">' + b('ok', 'Valider', true) + b('cancel', 'Annuler') + '</div>';
+  };
+
+  window.MoveKit = { place: place, slot: slot, html: html, DAYS: DAYS };
 })();
 </script>
 <script>
@@ -620,21 +697,49 @@ const stepsHtml = (steps) => steps.map((s) => s.repeat
 const FB = [['facile', 'Facile'], ['bien', 'Bien'], ['dur', 'Dur'], ['ratee', 'Ratée']];
 let PL = null;
 // Séances déplacées : P.moves = { idSéance: index du jour dans la semaine (0 = lundi) }. L'id ne change pas, les ressentis suivent.
-const applyMoves = (plan, mv) => plan.weeks.forEach((w) => {
-w.sessions.forEach((s) => { s.origDate = s.date; });
-w.sessions.forEach((s) => { const to = mv[s.id]; if (to == null || s.type === 'race') return;
-const d = addDays(w.monday, to); if (key(d) === key(s.date)) return;
-const o = w.sessions.find((x) => x !== s && x.type !== 'race' && key(x.date) === key(d)); if (o) o.date = s.date;
-s.date = d; s.moved = true; });
-w.sessions.sort((a, b) => a.date - b.date); });
+// P.moves = { idSéance: jours depuis le lundi de sa semaine d'origine (7+ = semaine suivante) ou 'x' = supprimée }.
+const applyMoves = (plan, mv) => { const weeks = plan.weeks, later = [];
+weeks.forEach((w) => w.sessions.forEach((s) => { s.origDate = s.date; }));
+weeks.forEach((w) => { w.removed = []; w.sessions = w.sessions.filter((s) => { const to = mv[s.id];
+if (to == null || s.type === 'race') return true;
+if (to === 'x') { w.removed.push(s); return false; }
+const d = addDays(monday(s.origDate), to), tw = weeks.find((x) => +x.monday === +monday(d));
+if (!tw) return true;
+s.date = d; s.moved = key(d) !== key(s.origDate);
+if (tw !== w) { later.push([tw, s]); return false; }
+return true; }); });
+later.forEach(([tw, s]) => tw.sessions.push(s));
+weeks.forEach((w) => w.sessions.sort((a, b) => a.date - b.date)); };
 const DOW3 = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-const moveHtml = (s, P) => { if (s.type === 'race' || P.fb[s.id] || !PL) return '';
-const w = PL.weeks.find((x) => x.sessions.includes(s)); if (!w) return '';
-const at = Math.round((s.date - w.monday) / DAY);
-return `<details class="move"><summary>${s.moved ? `Déplacée (prévue ${s.origDate.toLocaleDateString('fr-FR', { weekday: 'long' })}) · changer` : 'Déplacer cette séance'}</summary>
-<div class="mv-days">${DOW3.map((l, k) => { const d = addDays(w.monday, k), busy = w.sessions.some((x) => x !== s && key(x.date) === key(d));
-return `<button type="button" class="mv-d${k === at ? ' on' : ''}" data-mv="${s.id}" data-to="${k}"${d < today || k === at ? ' disabled' : ''}>${l}<small>${d.getDate()}</small>${busy ? '<i>⇄</i>' : ''}</button>`; }).join('')}</div>
-${s.moved ? `<button type="button" class="btn sm" data-mvreset="${s.id}">Remettre au jour prévu</button>` : ''}<p class="note">⇄ = échange avec la séance déjà prévue ce jour-là.</p></details>`; };
+const MK = window.MoveKit;
+const weekOfS = (s) => PL.weeks.find((x) => x.sessions.includes(s));
+const dayIn = (w, d) => Math.round((d - w.monday) / DAY);
+const mvItems = (w, P) => w.sessions.map((x) => ({ s: x, id: x.id, day: dayIn(w, x.date), hard: x.type !== 'easy', fixed: !!P.fb[x.id] || x.type === 'race' || x.date < today, label: TYPE[x.type] }));
+const moveHtml = (s, P) => { if (s.type === 'race' || P.fb[s.id] || !PL || !MK) return '';
+const w = weekOfS(s); if (!w) return '';
+const at = dayIn(w, s.date), w2 = PL.weeks[w.index + 1], hasNext = w2 && key(monday(w2.monday)) !== key(monday(PL.raceDate));
+return `<details class="move"><summary>${s.moved ? `Déplacée (prévue ${s.origDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' })}) · changer` : 'Déplacer cette séance'}</summary>
+<div class="mv-days">${DOW3.map((l, k) => { const d = addDays(w.monday, k), busy = w.sessions.some((x) => x !== s && key(x.date) === key(d)), fixed = w.sessions.some((x) => x !== s && key(x.date) === key(d) && (P.fb[x.id] || x.type === 'race'));
+return `<button type="button" class="mv-d${k === at ? ' on' : ''}" data-mv="${s.id}" data-to="${k}"${d < today || k === at || fixed ? ' disabled' : ''}>${l}<small>${d.getDate()}</small>${busy ? '<i>•</i>' : ''}</button>`; }).join('')}</div>
+<div class="mv-acts">${hasNext ? `<button type="button" class="btn sm" data-mvnext="${s.id}">À la semaine prochaine</button>` : ''}<button type="button" class="btn sm" data-mvdel="${s.id}">Supprimer</button>${s.moved ? `<button type="button" class="btn sm" data-mvreset="${s.id}">Remettre au jour prévu</button>` : ''}</div>
+<div class="mv-out" hidden></div><p class="note">• = une séance est déjà prévue ce jour-là : les autres se décalent si besoin, pour garder 48 h entre deux séances dures.</p></details>`; };
+const toVal = (s, d) => Math.round((d - monday(s.origDate)) / DAY);
+const pushNext = (P, s) => { const w = weekOfS(s), w2 = PL.weeks[w.index + 1]; if (!w2) return false;
+const sl = MK.slot(mvItems(w2, P), dayIn(w, s.date), s.type !== 'easy', 0); if (!sl) return false;
+P.moves[s.id] = toVal(s, addDays(w2.monday, sl.day)); return true; };
+let pendingMove = null;
+const proposeMove = (P, s, to, box) => { const w = weekOfS(s), items = mvItems(w, P), minDay = Math.max(0, dayIn(w, today));
+const r = MK.place(items, s.id, to, minDay);
+const commit = (skip) => { items.forEach((x) => { const d = r.res[x.id]; if (d == null || x.fixed || x === skip) return; if (d !== x.day || x.id === s.id) P.moves[x.id] = toVal(x.s, addDays(w.monday, d)); }); };
+pendingMove = { r, commit };
+const h = MK.html(r, TYPE[s.type], to);
+if (!h) { commit(); save(); render(); return; }
+box.innerHTML = h; box.hidden = false; };
+// Mise en garde si beaucoup de séances sont supprimées : visible seulement à partir de 3 sur les 4 dernières semaines.
+const delWarn = (P, plan, ci) => { const n = plan.weeks.slice(Math.max(0, ci - 3), ci + 3).reduce((a, w) => a + (w.removed || []).length, 0);
+if (n < 3) return '';
+return `<div class="regul force"><b>Beaucoup de séances supprimées</b> · ${n} en quelques semaines. Si le plan est trop chargé, mieux vaut le recalculer : moins de sorties par semaine ou un volume de départ plus bas.
+<button type="button" class="btn sm" data-go="edit" style="margin-top:8px">Modifier le plan</button></div>`; };
 const fuelTxt = (s) => { const min = s.sec / 60; if ((s.type !== 'long' && s.type !== 'race') || min < 75) return '';
 const n = Math.floor((min - 1) / 40);
 return `<p class="fuel"><b>Ravitaillement</b> · ${n} gel${n > 1 ? 's' : ''} ou équivalent (20 à 25 g de glucides) : un toutes les 40 min dès la 40e minute, et quelques gorgées d'eau tous les quarts d'heure.${s.type === 'race' ? '' : ' Teste ce que tu prendras le jour J.'}</p>`; };
@@ -798,7 +903,9 @@ body = `<section class="card">
 <button type="button" class="icon-btn" data-wk="${weekIdx + 1}" ${weekIdx < plan.weeks.length - 1 ? '' : 'disabled'} aria-label="Semaine suivante">›</button></div>
 <div class="bar"><i style="width:${Math.min(100, (done / Math.max(1, W.km)) * 100)}%"></i></div>
 ${reg ? `<div class="regul ${reg[0]}"><b>Auto-régulation</b> · ${reg[1]}</div>` : ''}
+${delWarn(P, plan, ci)}
 <div class="sessions">${W.sessions.map((s) => sessionCard(s, P)).join('')}</div>
+${W.removed && W.removed.length ? `<div class="mv-removed">${W.removed.map((s) => `<span>Supprimée : <b>${esc(s.title)}</b> (${s.origDate.toLocaleDateString('fr-FR', { weekday: 'long' })})</span><button type="button" class="btn sm" data-mvundo="${s.id}">Rétablir</button>`).join('')}</div>` : ''}
 </section>`;
 } else if (sub === 'cal') {
 const first = new Date(plan.weeks[0].monday.getFullYear(), plan.weeks[0].monday.getMonth(), 1), last = new Date(plan.raceDate.getFullYear(), plan.raceDate.getMonth(), 1);
@@ -931,8 +1038,20 @@ const t = e.target.closest('button');
 if (!t) return;
 const d = t.dataset;
 if (d.sub) { sub = d.sub; if (d.watch) watchOpen = true; render(); return; }
-if (d.mv) { const P = plans[cur]; P.moves = P.moves || {}; P.moves[d.mv] = Number(d.to); save(); render(); return; }
-if (d.mvreset) { const P = plans[cur]; if (P.moves) delete P.moves[d.mvreset]; save(); render(); return; }
+if (d.mv || d.mvreset || d.mvnext || d.mvdel || d.mvundo || d.mvact) { const P = plans[cur]; P.moves = P.moves || {};
+if (d.mvundo) { delete P.moves[d.mvundo]; save(); render(); return; }
+if (d.mvact) { const p = pendingMove; if (!p) return; const box = t.closest('.mv-out');
+if (d.mvact === 'cancel') { box.hidden = true; pendingMove = null; return; }
+const pb = p.r.noRoom[0] || p.r.tooClose[0];
+if (d.mvact === 'ok' || d.mvact === 'keep') p.commit();
+else if (d.mvact === 'remove') { p.commit(pb.item); P.moves[pb.item.id] = 'x'; }
+else if (d.mvact === 'next') { p.commit(pb.item); if (!pushNext(P, pb.item.s)) { alert('Pas de place la semaine prochaine.'); return; } }
+pendingMove = null; save(); render(); return; }
+const s = PL && PL.weeks.flatMap((w) => w.sessions).find((x) => x.id === (d.mv || d.mvreset || d.mvnext || d.mvdel)); if (!s) return;
+if (d.mvreset) { delete P.moves[s.id]; save(); render(); return; }
+if (d.mvdel) { if (!confirm(`Supprimer « ${s.title} » de ton plan ? Tu pourras la rétablir.`)) return; P.moves[s.id] = 'x'; save(); render(); return; }
+if (d.mvnext) { if (!pushNext(P, s)) { alert('Pas de place la semaine prochaine.'); return; } save(); render(); return; }
+proposeMove(P, s, Number(d.to), t.closest('.move').querySelector('.mv-out')); return; }
 if (d.ics) { downloadIcs(); return; }
 if (d.nutri) { const P = plans[cur]; P.cfg.nutri = !P.cfg.nutri; save(); render(); return; }
 if (d.share) { const c = { ...plans[cur].cfg }, url = shareUrl(c), title = `Plan ${DIST[c.dist].label}${c.name ? ' · ' + c.name : ''}`;
