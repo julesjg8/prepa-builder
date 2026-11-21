@@ -105,6 +105,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .seg{display:flex;gap:4px;padding:4px;border-radius:13px;background:var(--surface-2);border:1px solid var(--border);position:sticky;top:calc(env(safe-area-inset-top,0px) + 62px);z-index:5}
 .seg button{flex:1;min-height:38px;border:0;border-radius:10px;background:none;font-size:13px;font-weight:600;color:var(--text-2);cursor:pointer}
 .seg button.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--border),var(--shadow)}
+@media (max-width:420px){.seg{gap:2px;padding:3px}.seg button{flex:1 1 auto;padding:0 5px;font-size:12.5px;min-width:0}}
 /* Week */
 .wk-head{display:flex;align-items:center;gap:10px}
 .wk-head > div{flex:1;min-width:0;text-align:center}
@@ -248,6 +249,17 @@ button.brand{background:none;border:0;padding:0;color:inherit;cursor:pointer;tex
 .tuto-nav .btn{flex:1}
 .tuto .note{text-align:center}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.move{font-size:13px;margin-top:2px}.move summary{cursor:pointer;color:var(--muted);list-style:none;padding:4px 0}.move summary::-webkit-details-marker{display:none}.move summary::before{content:"↔ "}.move[open] summary{color:var(--text-2)}
+.mv-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:6px 0}.mv-d{position:relative;display:grid;gap:1px;justify-items:center;padding:6px 0;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:12px}.mv-d small{font-size:11px;color:var(--muted)}.mv-d i{position:absolute;top:1px;right:3px;font-style:normal;font-size:10px;color:var(--accent-ink)}.mv-d.on{border-color:var(--accent);background:var(--accent-soft)}.mv-d:disabled{opacity:.4;cursor:default}.mv-d.on:disabled{opacity:1}
+.fuel{font-size:13px;color:var(--text-2);background:var(--accent-soft);border-radius:9px;padding:8px 10px;margin:4px 0 0}
+.plus{display:grid;gap:14px}.tool{display:flex;gap:12px;align-items:center;justify-content:space-between}.tool>div{min-width:0}.tool .btn{flex:0 0 auto}.tool p{margin:2px 0 0}
+.howto summary{cursor:pointer;font-weight:600;font-size:14px}.howto ol{padding-left:20px;font-size:14px;color:var(--text-2);display:grid;gap:4px}.howto p{font-size:14px;margin:8px 0 0}
+.nutri{display:grid;gap:10px;padding:12px;border-radius:12px;background:var(--surface-2)}.nutri p{margin:2px 0 0;font-size:14px;color:var(--text-2)}
+.records>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}.records>summary::-webkit-details-marker{display:none}.records>summary h2{font-size:18px;margin:0}.records>summary::after{content:"›";margin-left:auto;color:var(--muted);transition:transform .2s}.records[open]>summary::after{transform:rotate(90deg)}
+.rec-list{display:grid;margin:12px 0}.rec{display:grid;grid-template-columns:minmax(0,7em) auto 1fr auto;gap:4px 12px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--grid)}.rec b{font-size:16px}.rec-x{border:0;background:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0 4px}
+@media (max-width:520px){.rec{grid-template-columns:1fr auto auto}.rec .note{grid-column:1/-1;grid-row:2}}
+.rec-add{display:flex;flex-wrap:wrap;gap:8px}.rec-add select,.rec-add input{min-height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);padding:0 10px;font:inherit;font-size:14px}.rec-add input[type=text]{width:7em}.rec-msg.err{color:var(--bad)}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent-ink);font:inherit;text-decoration:underline;cursor:pointer}
 </style>
 
 <header class="top"><div class="top-in">
@@ -256,6 +268,139 @@ button.brand{background:none;border:0;padding:0;color:inherit;cursor:pointer;tex
 </div></header>
 <main class="wrap" id="app"></main>
 
+<script>
+// Parcours de la course : import d'un .gpx, carte et profil en SVG, téléchargement et partage.
+// Tout reste sur ce téléphone (localStorage). Même code dans Prépa Moorea et Prépa Builder.
+(function () {
+  'use strict';
+  var RAD = Math.PI / 180;
+  var hav = function (a, b) {
+    var dLat = (b[0] - a[0]) * RAD, dLon = (b[1] - a[1]) * RAD;
+    var s = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(a[0] * RAD) * Math.cos(b[0] * RAD) * Math.pow(Math.sin(dLon / 2), 2);
+    return 2 * 6371000 * Math.asin(Math.sqrt(s));
+  };
+  var esc = function (x) { return String(x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var r5 = function (x) { return Math.round(x * 1e5) / 1e5; };
+
+  var parse = function (text) {
+    var doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) return null;
+    var nodes = doc.querySelectorAll('trkpt');
+    if (!nodes.length) nodes = doc.querySelectorAll('rtept');
+    var pts = [];
+    Array.prototype.forEach.call(nodes, function (n) {
+      var la = parseFloat(n.getAttribute('lat')), lo = parseFloat(n.getAttribute('lon'));
+      if (!isFinite(la) || !isFinite(lo)) return;
+      var e = n.getElementsByTagName('ele')[0], ele = e ? parseFloat(e.textContent) : NaN;
+      pts.push([r5(la), r5(lo), isFinite(ele) ? Math.round(ele) : null]);
+    });
+    if (pts.length < 2) return null;
+    if (pts.length > 1500) { var step = pts.length / 1500, out = []; for (var i = 0; i < 1500; i++) out.push(pts[Math.floor(i * step)]); out.push(pts[pts.length - 1]); pts = out; }
+    var nm = doc.querySelector('trk > name') || doc.querySelector('rte > name') || doc.querySelector('metadata > name');
+    return { name: nm ? nm.textContent.trim() : '', pts: pts };
+  };
+
+  var stats = function (pts) {
+    var dist = [0], up = 0, down = 0, ref = null, hasEle = pts.some(function (p) { return p[2] != null; });
+    for (var i = 1; i < pts.length; i++) dist.push(dist[i - 1] + hav(pts[i - 1], pts[i]));
+    // Dénivelé avec un seuil de 3 m pour ignorer le bruit du GPS.
+    pts.forEach(function (p) { if (p[2] == null) return; if (ref == null) { ref = p[2]; return; } var d = p[2] - ref; if (d >= 3) { up += d; ref = p[2]; } else if (d <= -3) { down -= d; ref = p[2]; } });
+    return { dist: dist, km: dist[dist.length - 1] / 1000, up: Math.round(up), down: Math.round(down), hasEle: hasEle };
+  };
+
+  var mapSvg = function (pts) {
+    var lat0 = pts.reduce(function (s, p) { return s + p[0]; }, 0) / pts.length, k = Math.cos(lat0 * RAD);
+    var xy = pts.map(function (p) { return [p[1] * k, -p[0]]; });
+    var xs = xy.map(function (p) { return p[0]; }), ys = xy.map(function (p) { return p[1]; });
+    var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+    var W = 320, H = 220, pad = 12, sc = Math.min((W - 2 * pad) / ((x1 - x0) || 1e-9), (H - 2 * pad) / ((y1 - y0) || 1e-9));
+    var ox = (W - (x1 - x0) * sc) / 2, oy = (H - (y1 - y0) * sc) / 2;
+    var P = xy.map(function (p) { return [(p[0] - x0) * sc + ox, (p[1] - y0) * sc + oy]; });
+    var d = P.map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join('');
+    var a = P[0], b = P[P.length - 1];
+    return '<svg class="crs-map" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Tracé du parcours">' +
+      '<path d="' + d + '" fill="none" stroke="var(--crs-c)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<circle cx="' + a[0].toFixed(1) + '" cy="' + a[1].toFixed(1) + '" r="5" fill="var(--crs-ok)"/>' +
+      '<circle cx="' + b[0].toFixed(1) + '" cy="' + b[1].toFixed(1) + '" r="5" fill="none" stroke="var(--crs-ink)" stroke-width="2.5"/></svg>';
+  };
+
+  var profileSvg = function (pts, st) {
+    var e = pts.map(function (p) { return p[2]; });
+    var known = e.filter(function (v) { return v != null; }); if (!known.length) return '';
+    var lo = Math.min.apply(null, known), hi = Math.max.apply(null, known), span = Math.max(20, hi - lo);
+    var W = 320, H = 90, top = 8, bot = 18, tot = st.dist[st.dist.length - 1] || 1;
+    var x = function (i) { return (st.dist[i] / tot) * W; }, y = function (v) { return top + (1 - (v - lo) / span) * (H - top - bot); };
+    var last = known[0], d = '';
+    e.forEach(function (v, i) { if (v != null) last = v; d += (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(last).toFixed(1); });
+    var ticks = '', stepKm = st.km > 30 ? 10 : st.km > 12 ? 5 : st.km > 4 ? 2 : 1;
+    for (var t = stepKm; t < st.km; t += stepKm) { var tx = (t * 1000 / tot) * W; ticks += '<line x1="' + tx.toFixed(1) + '" x2="' + tx.toFixed(1) + '" y1="' + top + '" y2="' + (H - bot) + '" stroke="var(--crs-grid)"/><text x="' + tx.toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">' + t + '</text>'; }
+    return '<svg class="crs-prof" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Profil : de ' + lo + ' à ' + hi + ' m d\'altitude">' + ticks +
+      '<path d="' + d + 'L' + W + ' ' + (H - bot) + 'L0 ' + (H - bot) + 'Z" fill="var(--crs-c)" fill-opacity=".18"/>' +
+      '<path d="' + d + '" fill="none" stroke="var(--crs-c)" stroke-width="2"/>' +
+      '<text x="2" y="' + (top + 2) + '" dominant-baseline="hanging">' + hi + ' m</text><text x="2" y="' + (H - bot - 3) + '">' + lo + ' m</text></svg>';
+  };
+
+  var toGpx = function (c) {
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Prepa" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>' + esc(c.name || 'Parcours') + '</name><trkseg>\n' +
+      c.pts.map(function (p) { return '<trkpt lat="' + p[0] + '" lon="' + p[1] + '">' + (p[2] != null ? '<ele>' + p[2] + '</ele>' : '') + '</trkpt>'; }).join('\n') + '\n</trkseg></trk>\n</gpx>\n';
+  };
+  var fileName = function (c) { return (c.name || 'parcours').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() + '.gpx'; };
+  var download = function (name, txt) {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/gpx+xml' })); a.download = name;
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  };
+
+  var CSS = '.crs{--crs-c:var(--accent,#d95926);--crs-ok:var(--good,#0ca30c);--crs-ink:var(--text,#222);--crs-grid:var(--grid,rgba(127,127,127,.25))}' +
+    '.crs-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.crs-kpis{display:flex;flex-wrap:wrap;gap:6px 18px;margin:8px 0;font-size:14px}.crs-kpis b{font-size:17px}' +
+    '.crs-map{width:100%;max-width:520px;max-height:260px;display:block;margin-top:6px}.crs-prof{width:100%;max-width:520px;display:block;margin-top:6px;font:10px system-ui,sans-serif;fill:var(--muted,#888)}' +
+    '.crs-file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}.crs-msg{min-height:1em}.crs-msg.err{color:var(--crit-ink,#c33)}';
+
+  // opts: { key, raceKm, raceName }
+  var mount = function (el, opts) {
+    if (!el) return;
+    if (!document.getElementById('crs-css')) { var st = document.createElement('style'); st.id = 'crs-css'; st.textContent = CSS; document.head.appendChild(st); }
+    var get = function () { try { return JSON.parse(localStorage.getItem(opts.key) || 'null'); } catch (e) { return null; } };
+    var render = function (msg, err) {
+      var c = get(), s = c && stats(c.pts);
+      var off = s && opts.raceKm && Math.abs(s.km - opts.raceKm) / opts.raceKm > 0.03;
+      el.classList.add('crs');
+      el.innerHTML = '<h2>Parcours de la course</h2>' + (c
+        ? '<div class="sub">' + esc(c.name || opts.raceName || 'Parcours importé') + '</div>' +
+          '<div class="crs-kpis tnum"><span><b>' + s.km.toFixed(1).replace('.', ',') + '</b> km</span>' + (s.hasEle ? '<span>D+ <b>' + s.up + '</b> m</span><span>D− <b>' + s.down + '</b> m</span>' : '<span>pas d\'altitude dans le fichier</span>') + '</div>' +
+          mapSvg(c.pts) + profileSvg(c.pts, s) +
+          (off ? '<p class="note">Le tracé fait ' + s.km.toFixed(1).replace('.', ',') + ' km pour ' + String(opts.raceKm).replace('.', ',') + ' annoncés. Courant sur les courses de campagne : fie-toi plutôt au profil qu\'aux km exacts.</p>' : '') +
+          '<p class="note">Point plein = départ, cercle = arrivée. Le profil est en km.</p>' +
+          '<div class="crs-row"><button type="button" class="btn" data-crs="dl">Télécharger (.gpx)</button><button type="button" class="btn" data-crs="share">Partager</button><label class="btn">Remplacer<input class="crs-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml"></label><button type="button" class="btn" data-crs="del">Supprimer</button></div>'
+        : '<div class="sub">Importe le tracé officiel pour voir la carte, le profil et le dénivelé.</div>' +
+          '<p class="note">Où le trouver : le site de la course, ou la trace Strava / Garmin d\'un coureur de l\'an dernier (Exporter en GPX).</p>' +
+          '<div class="crs-row"><label class="btn primary">Mettre mon parcours (.gpx)<input class="crs-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml"></label></div>') +
+        '<p class="note crs-msg' + (err ? ' err' : '') + '" role="status">' + (msg ? esc(msg) : '') + '</p>';
+    };
+    el.addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0]; if (!f) return;
+      f.text().then(function (txt) {
+        var c = parse(txt);
+        if (!c) { render('Fichier illisible : il faut un .gpx avec un tracé.', true); return; }
+        try { localStorage.setItem(opts.key, JSON.stringify(c)); } catch (err) { render('Impossible d\'enregistrer (navigation privée ?).', true); return; }
+        render('Parcours enregistré sur ce téléphone.');
+      });
+    });
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-crs]'); if (!b) return;
+      var c = get(); if (!c) return;
+      if (b.dataset.crs === 'del') { if (!confirm('Supprimer le parcours de ce téléphone ?')) return; try { localStorage.removeItem(opts.key); } catch (err) { /* ignore */ } render(); return; }
+      var txt = toGpx(c), name = fileName(c);
+      if (b.dataset.crs === 'share') {
+        var file = typeof File === 'function' ? new File([txt], name, { type: 'application/gpx+xml' }) : null;
+        if (file && navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: c.name || 'Parcours' }).catch(function () {}); return; }
+      }
+      download(name, txt);
+    });
+    render();
+  };
+  window.Course = { mount: mount, parse: parse, stats: stats };
+})();
+</script>
 <script>
 (function () {
 'use strict';
@@ -473,6 +618,26 @@ const stepsHtml = (steps) => steps.map((s) => s.repeat
 ? `<li class="rep"><span class="x">${s.repeat} fois</span>${s.steps.map((x) => `<span>${esc(x.name)} · ${durTxt(x.dur)}${x.target ? ` · <span class="tnum">${tgtTxt(x.target)}</span>` : x.note ? ` · ${esc(x.note)}` : ''}</span>`).join('')}</li>`
 : `<li><span>${esc(s.name)}${s.note ? ` <span class="note">(${esc(s.note)})</span>` : ''}</span><span class="tnum">${durTxt(s.dur)}</span>${s.target ? `<span class="t tnum">${tgtTxt(s.target)}</span>` : ''}</li>`).join('');
 const FB = [['facile', 'Facile'], ['bien', 'Bien'], ['dur', 'Dur'], ['ratee', 'Ratée']];
+let PL = null;
+// Séances déplacées : P.moves = { idSéance: index du jour dans la semaine (0 = lundi) }. L'id ne change pas, les ressentis suivent.
+const applyMoves = (plan, mv) => plan.weeks.forEach((w) => {
+w.sessions.forEach((s) => { s.origDate = s.date; });
+w.sessions.forEach((s) => { const to = mv[s.id]; if (to == null || s.type === 'race') return;
+const d = addDays(w.monday, to); if (key(d) === key(s.date)) return;
+const o = w.sessions.find((x) => x !== s && x.type !== 'race' && key(x.date) === key(d)); if (o) o.date = s.date;
+s.date = d; s.moved = true; });
+w.sessions.sort((a, b) => a.date - b.date); });
+const DOW3 = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const moveHtml = (s, P) => { if (s.type === 'race' || P.fb[s.id] || !PL) return '';
+const w = PL.weeks.find((x) => x.sessions.includes(s)); if (!w) return '';
+const at = Math.round((s.date - w.monday) / DAY);
+return `<details class="move"><summary>${s.moved ? `Déplacée (prévue ${s.origDate.toLocaleDateString('fr-FR', { weekday: 'long' })}) · changer` : 'Déplacer cette séance'}</summary>
+<div class="mv-days">${DOW3.map((l, k) => { const d = addDays(w.monday, k), busy = w.sessions.some((x) => x !== s && key(x.date) === key(d));
+return `<button type="button" class="mv-d${k === at ? ' on' : ''}" data-mv="${s.id}" data-to="${k}"${d < today || k === at ? ' disabled' : ''}>${l}<small>${d.getDate()}</small>${busy ? '<i>⇄</i>' : ''}</button>`; }).join('')}</div>
+${s.moved ? `<button type="button" class="btn sm" data-mvreset="${s.id}">Remettre au jour prévu</button>` : ''}<p class="note">⇄ = échange avec la séance déjà prévue ce jour-là.</p></details>`; };
+const fuelTxt = (s) => { const min = s.sec / 60; if ((s.type !== 'long' && s.type !== 'race') || min < 75) return '';
+const n = Math.floor((min - 1) / 40);
+return `<p class="fuel"><b>Ravitaillement</b> · ${n} gel${n > 1 ? 's' : ''} ou équivalent (20 à 25 g de glucides) : un toutes les 40 min dès la 40e minute, et quelques gorgées d'eau tous les quarts d'heure.${s.type === 'race' ? '' : ' Teste ce que tu prendras le jour J.'}</p>`; };
 const sessionCard = (s, P) => {
 const v = P.fb[s.id], open = openSteps.has(s.id), isToday = key(s.date) === key(today);
 return `<div class="session ${isToday ? 'today' : ''}" style="--c:${typeVar(s.type)}">
@@ -481,7 +646,9 @@ return `<div class="session ${isToday ? 'today' : ''}" style="--c:${typeVar(s.ty
 <span class="s-title">${esc(s.title)}</span>
 <p class="s-desc">${esc(s.desc)}</p>
 <button type="button" class="s-toggle" data-steps="${s.id}" aria-expanded="${open}">${open ? 'Masquer les étapes ▴' : 'Voir les étapes ▾'}</button>
-${open ? `<ul class="steps">${stepsHtml(s.steps)}</ul>` : ''}
+${open ? `<ul class="steps">${stepsHtml(s.steps)}</ul><button type="button" class="s-toggle" data-sub="plus" data-watch="1">⌚ La créer sur ma montre</button>` : ''}
+${P.cfg.nutri ? fuelTxt(s) : ''}
+${moveHtml(s, P)}
 ${s.type === 'race' ? '' : `<div class="fb"><span class="q">${v ? 'Ton ressenti' : s.date <= today ? 'Séance faite ? Note ton ressenti' : 'À noter après la séance'}</span>${FB.map(([k, l]) => `<button type="button" data-fb="${s.id}" data-v="${k}" class="${v === k ? 'on' : ''}" aria-pressed="${v === k}" ${s.date > today ? 'disabled' : ''}>${l}</button>`).join('')}</div>`}
 </div>`;
 };
@@ -543,8 +710,72 @@ save(); view = 'plan'; sub = 'week'; weekIdx = monthIdx = null; render(); window
 });
 }
 
+// ---------- onglet Plus : calendrier, partage, nutrition, montre, parcours, records ----------
+let watchOpen = false;
+const icsEsc = (x) => String(x).replace(/\\/g, '\\\\').replace(/([,;])/g, '\\$1').replace(/\n/g, '\\n');
+const icsFold = (l) => { const out = []; while (l.length > 70) { out.push(l.slice(0, 70)); l = ' ' + l.slice(70); } out.push(l); return out.join('\r\n'); };
+const icsDay = (d) => key(d).replace(/-/g, '');
+const plainSteps = (steps) => steps.map((x) => (x.repeat ? `${x.repeat} x [ ${x.steps.map((y) => `${y.name} ${durTxt(y.dur)}${y.target ? ' ' + tgtTxt(y.target) : ''}`).join(' / ')} ]` : `${x.name} ${durTxt(x.dur)}${x.target ? ' ' + tgtTxt(x.target) : ''}`)).join('\n');
+const downloadIcs = () => { const P = plans[cur], all = PL.weeks.flatMap((w) => w.sessions), now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+const ev = all.filter((s) => s.date >= today && !P.fb[s.id]).map((s) => ['BEGIN:VEVENT', `UID:${s.id}-${cur}@prepa-builder`, `DTSTAMP:${now}`, `SEQUENCE:${Math.floor(Date.now() / 1000)}`,
+`DTSTART;VALUE=DATE:${icsDay(s.date)}`, `DTEND;VALUE=DATE:${icsDay(addDays(s.date, 1))}`, `SUMMARY:${icsEsc(`${s.type === 'race' ? '🏁' : '🏃'} ${s.title}`)}`,
+`DESCRIPTION:${icsEsc(`${s.desc}${s.steps.length ? '\n\n' + plainSteps(s.steps) : ''}`)}`, 'TRANSP:TRANSPARENT', 'END:VEVENT'].map(icsFold).join('\r\n'));
+const txt = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Prepa Builder//FR', 'METHOD:PUBLISH', 'X-WR-CALNAME:Prépa', ...ev, 'END:VCALENDAR'].join('\r\n') + '\r\n';
+const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/calendar;charset=utf-8' })); a.download = 'prepa.ics';
+document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); };
+const b64e = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64d = (t) => JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g, '+').replace(/_/g, '/')))));
+const shareUrl = (cfg) => location.origin + location.pathname + '#p=' + b64e(cfg);
+// Un lien partagé ne contient que les réglages du plan (pas les ressentis). Vérifié avant import.
+const readShared = (txt) => { const m = String(txt).match(/#p=([A-Za-z0-9_-]+)/); if (!m) return null;
+try { const c = b64d(m[1]); return c && DIST[c.dist] && /^\d{4}-\d{2}-\d{2}$/.test(c.raceDate) && /^\d{4}-\d{2}-\d{2}$/.test(c.start) && isFinite(c.goal) && isFinite(c.ref10k) ? c : null; } catch (e) { return null; } };
+const importShared = (c) => { if (!c) { alert('Lien de plan illisible.'); return; }
+if (!confirm(`Ajouter le plan « ${c.name || 'partagé'} » (${DIST[c.dist].label}, le ${parse(c.raceDate).toLocaleDateString('fr-FR')}) sur cet appareil ?`)) return;
+cur = 'p' + Date.now().toString(36); plans[cur] = { cfg: { ...c, name: String(c.name || '').slice(0, 60) }, fb: {} }; save(); view = 'plan'; sub = 'week'; weekIdx = monthIdx = null; render(); window.scrollTo(0, 0); };
+const REC = [['5k', '5 km', 5], ['10k', '10 km', 10], ['semi', 'Semi', 21.0975], ['marathon', 'Marathon', 42.195]];
+const NUTRI = (D) => [
+['Au quotidien', 'Des glucides à chaque repas (pâtes, riz, pain, pommes de terre, fruits), surtout la veille et le jour d\'une séance clé. 20 à 30 g de protéines dans l\'heure après une séance : yaourt, œufs, lait, viande ou poisson.'],
+['Boire', 'Un grand verre d\'eau au réveil, puis régulièrement. Par forte chaleur, ajoute une pincée de sel ou une boisson d\'effort pour les sorties de plus d\'une heure.'],
+['Sorties longues', 'Au-delà de 75 min : 30 à 60 g de glucides par heure (gel, pâte de fruit, boisson), dès la 40e minute. C\'est là que tu testes ce que tu prendras le jour J.'],
+['Avant la course', D.km > 15 ? 'Les 2 jours avant : plus de pâtes, riz, pain, un peu moins de fibres et de gras. Rien de nouveau. Petit-déjeuner 3 h avant le départ, celui que tu as testé avant tes sorties longues.' : 'La veille : un repas habituel riche en glucides, rien de nouveau. Petit-déjeuner léger 2 à 3 h avant le départ.'],
+['Pendant la course', D.km > 30 ? 'Un gel toutes les 30 à 40 min dès la 40e minute, avec de l\'eau à chaque ravitaillement. N\'attends pas d\'avoir faim ou soif.' : D.km > 15 ? 'De l\'eau aux ravitaillements, un gel vers la 45e-60e minute si tu cours plus d\'1 h 30.' : 'Quelques gorgées d\'eau suffisent. Pas besoin de gel.'],
+['Après', 'Bois, puis un repas avec glucides et protéines dans les 2 heures.']];
+const plusHtml = (P, plan, all) => { const c = P.cfg, D = plan.D, rec = store.get('pb.records', {});
+const rows = REC.map(([k, l, d]) => { const u = rec[k], ref = c.refDist === k && isFinite(c.refTime) ? c.refTime : NaN;
+const best = u && (!isFinite(ref) || u.t <= ref) ? { t: u.t, note: `${parse(u.d).toLocaleDateString('fr-FR')} · noté à la main`, own: true } : isFinite(ref) ? { t: ref, note: 'chrono de référence du plan' } : null;
+return best ? `<div class="rec"><span class="rec-k">${l}</span><b class="tnum">${fmtDur(best.t)}</b><span class="note tnum">${fmtPace(best.t / d)}/km · ${best.note}</span>${best.own ? `<button type="button" class="rec-x" data-recdel="${k}" aria-label="Supprimer le record ${l}">×</button>` : ''}</div>` : ''; }).join('');
+const nRec = REC.filter(([k]) => rec[k] || c.refDist === k).length;
+return `<section class="card plus">
+<div class="tool"><div><b>📅 Calendrier de l'iPhone</b><p class="note">Ajoute toutes les séances à venir dans un calendrier à part, nommé <b>Prépa</b>.</p></div><button type="button" class="btn sm primary" data-ics="1">Télécharger</button></div>
+<details class="howto"><summary>Comment faire, et changer après un déplacement ?</summary><ol>
+<li>Une seule fois : app Calendrier › Calendriers › Ajouter un calendrier, nomme-le <b>Prépa</b>.</li>
+<li>Touche <b>Télécharger</b>, puis <b>Tout ajouter</b> et choisis le calendrier <b>Prépa</b>.</li>
+<li>Séance déplacée ? Supprime le calendrier <b>Prépa</b> (toutes ses séances partent d'un coup), recrée-le et télécharge à nouveau.</li></ol></details>
+<div class="tool"><div><b>🔗 Partager le plan</b><p class="note">Envoie un lien : la personne retrouve le même plan (sans tes ressentis).</p></div><button type="button" class="btn sm" data-share="1">Partager</button></div>
+<div class="tool"><div><b>🍝 Conseils nutritionnels</b><p class="note">${c.nutri ? 'Activés : le ravitaillement s\'affiche aussi sur les sorties longues.' : 'Je souhaite des conseils pour manger et boire pendant la prépa.'}</p></div><button type="button" class="btn sm ${c.nutri ? '' : 'primary'}" data-nutri="1">${c.nutri ? 'Masquer' : 'Je souhaite'}</button></div>
+${c.nutri ? `<div class="nutri">${NUTRI(D).map(([h, t]) => `<div><b>${h}</b><p>${t}</p></div>`).join('')}<p class="note">Conseils généraux, pas un avis médical. En cas de régime particulier, demande à un professionnel.</p></div>` : ''}
+<details class="howto" id="watchTuto"><summary>⌚ Créer une séance sur sa montre</summary>
+<p class="note">Depuis le téléphone, sans ordinateur. Garde la séance ouverte dans l'onglet Semaine à côté pour recopier les étapes.</p>
+<p><b>Garmin</b> (app Garmin Connect)</p><ol>
+<li><b>Plus</b> (en bas à droite) › <b>Entraînement et planification</b> › <b>Entraînements</b> › <b>Créer un entraînement</b> › <b>Course à pied</b>.</li>
+<li>Pour chaque étape : touche-la, choisis la <b>Durée</b> (temps ou distance) et l'<b>Objectif d'intensité</b> › <b>Allure</b>, puis entre la fourchette de l'app.</li>
+<li>Pour un fractionné : <b>Ajouter une répétition</b>, mets dedans l'effort et la récup, puis le nombre de fois.</li>
+<li><b>Enregistrer</b>, puis l'icône d'envoi › ta montre. Elle la reçoit à la prochaine synchro.</li>
+<li>Sur la montre : <b>Course</b> › menu › <b>Entraînements</b> › ta séance › <b>Faire l'entraînement</b>.</li></ol>
+<p><b>Apple Watch</b> (app Exercice, watchOS 9 ou plus)</p><ol>
+<li>Sur la montre : <b>Course extérieure</b> › <b>•••</b> › <b>Créer un entraînement</b> › <b>Personnalisé</b>.</li>
+<li>Ajoute l'échauffement, puis les blocs <b>Travail</b> / <b>Récupération</b> avec une alerte d'allure, puis le retour au calme.</li></ol>
+<p class="note">Les noms des menus peuvent un peu changer selon la version de l'app.</p></details>
+</section>
+<section class="card" id="course"></section>
+<details class="card records"><summary><h2>Mes records</h2><span class="sub">${nRec ? `${nRec} distance${nRec > 1 ? 's' : ''}` : 'aucun pour l\'instant'} · toucher pour voir</span></summary>
+<div class="rec-list">${rows || '<p class="note">Aucun record noté.</p>'}</div>
+<div class="rec-add"><select id="recK" aria-label="Distance">${REC.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select><input id="recT" type="text" placeholder="45:30" inputmode="numeric" autocomplete="off" aria-label="Temps"><input id="recD" type="date" value="${key(today)}" aria-label="Date"><button type="button" class="btn sm" data-recadd="1">Noter</button></div>
+<p class="note rec-msg" role="status">Ton chrono de référence compte automatiquement. Un meilleur temps ailleurs ? Note-le.</p></details>`; };
+
 function renderPlan() {
 const P = plans[cur], c = P.cfg, plan = buildPlan(c, P.fb), D = plan.D;
+applyMoves(plan, P.moves || {}); PL = plan;
 const ci = Math.min(plan.weeks.length - 1, Math.max(0, Math.floor((monday(today) - plan.weeks[0].monday) / DAY / 7)));
 if (weekIdx == null) weekIdx = ci;
 const W = plan.weeks[weekIdx], curW = plan.weeks[ci];
@@ -603,6 +834,8 @@ body = `<section class="card">
 <span class="chips">${w.sessions.map((s) => `<span class="chip"><span class="dot" style="--c:${typeVar(s.type)}"></span>${esc(s.type === 'long' ? 'SL ' + Math.round(s.km) + ' km' : s.type === 'easy' ? 'Footing' : s.title.replace(/^Allure course/, 'All. course'))}</span>`).join('')}${w.recovery ? '<span class="tag">allégée</span>' : ''}${w.level > 0 ? '<span class="tag">durcie</span>' : ''}</span>
 <span class="vol tnum"><span class="bar"><i style="width:${(w.km / maxKm) * 100}%;background:${phaseVar(w.phase)}"></i></span>${w.km} km</span></button>`).join('')}</div>
 </section>`;
+} else if (sub === 'plus') {
+body = plusHtml(P, plan, all);
 } else {
 const Pc = plan.P, rows = [['easy', 'Footing', `${fmtPace(Pc.easy - 15)}-${fmtPace(Pc.easy + 15)}`, 'Aisance respiratoire, tu peux parler'], ['long', 'Endurance (sortie longue)', `${fmtPace(Pc.long - 12)}-${fmtPace(Pc.long + 12)}`, 'Un peu plus vite que le footing'], ['quality', 'Seuil', `${fmtPace(Pc.threshold.fast)}-${fmtPace(Pc.threshold.slow)}`, 'Soutenu, tenable environ 1 h'], ['quality', 'Fractionné (allure 5 km)', `${fmtPace(Pc.interval.fast)}-${fmtPace(Pc.interval.slow)}`, 'Dur, répétitions de 3 à 5 min'], ['test', 'VMA', `${fmtPace(Pc.vma.fast)}-${fmtPace(Pc.vma.slow)}`, 'Très vite, répétitions courtes'], ['race', `Allure course (${D.label.toLowerCase()})`, fmtPace(plan.rp), c.noGoal ? `Repère : ${fmtDur(c.goal)}` : `Objectif ${fmtDur(c.goal)}`]];
 body = `<section class="card"><h2 style="font-size:18px">Tes allures d'entraînement</h2><p class="sub">Calculées à partir de ton ${REF[c.refDist || '10k'][1]} en ${fmtDur(c.refTime ?? c.ref10k)}. Refais un chrono et mets-le à jour dans « Modifier le plan » pour les recaler.</p>
@@ -621,9 +854,11 @@ ${P.example ? `<div class="example"><span><b>Plan d'exemple.</b> Un semi fictif,
 ${next ? `<span class="note" style="margin-top:6px">Prochaine séance</span><button type="button" class="cal-row" style="--c:${typeVar(next.type)}" data-goto="${next.id}"><span class="d">${next.date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}</span><span class="r"><b>${esc(next.title)}</b><small>≈ ${fmt1(next.km)} km · ${fmtHM(next.sec)}</small></span></button>` : ''}
 <button type="button" class="btn sm" data-go="edit" style="align-self:flex-start;margin-top:4px">Modifier le plan</button></div>
 </section>
-<nav class="seg" role="tablist" aria-label="Vues du plan">${[['week', 'Semaine'], ['cal', 'Calendrier'], ['prog', 'Programme'], ['paces', 'Allures']].map(([k, l]) => `<button type="button" role="tab" data-sub="${k}" class="${sub === k ? 'on' : ''}" aria-selected="${sub === k}">${l}</button>`).join('')}</nav>
+<nav class="seg" role="tablist" aria-label="Vues du plan">${[['week', 'Semaine'], ['cal', 'Calendrier'], ['prog', 'Programme'], ['paces', 'Allures'], ['plus', 'Plus']].map(([k, l]) => `<button type="button" role="tab" data-sub="${k}" class="${sub === k ? 'on' : ''}" aria-selected="${sub === k}">${l}</button>`).join('')}</nav>
 ${body}`;
 app._plan = plan;
+if (sub === 'plus' && window.Course) window.Course.mount(document.getElementById('course'), { key: 'pb.course.' + cur, raceKm: D.km, raceName: c.name });
+if (sub === 'plus' && watchOpen) { const w = document.getElementById('watchTuto'); if (w) { w.open = true; w.scrollIntoView(); } watchOpen = false; }
 }
 
 
@@ -680,7 +915,7 @@ app.innerHTML = `
 <p class="home-sub">Réponds à quelques questions sur ta course et ton niveau : le plan se construit semaine par semaine, avec des allures calculées pour toi, et s'ajuste ensuite à tes ressentis.</p>
 <div class="home-cta"><button type="button" class="btn primary lg" data-go="new">Créer mon plan d'entraînement</button>
 ${saved.length ? `<button type="button" class="btn" data-open="${cur}">Reprendre mon plan</button>` : '<button type="button" class="btn" data-go="example">Voir un exemple</button>'}</div>
-<p class="note">Gratuit, sans compte. Ton plan reste enregistré sur cet appareil.</p>
+<p class="note">Gratuit, sans compte. Ton plan reste enregistré sur cet appareil. On t'a envoyé un plan ? <button type="button" class="linkbtn" data-go="import">Importer un lien</button></p>
 </section>
 ${standalone ? '' : `<button type="button" class="install" data-go="tuto"><span class="ii">${PLUS}</span><span><b>${isIOS ? 'Installe-la sur ton iPhone' : 'Installer sur l\'écran d\'accueil'}</b><span>Tuto en 5 étapes : l'app s'ouvre comme une vraie, et ton plan reste enregistré.</span></span><span class="go">›</span></button>`}
 <section class="home-feats">
@@ -695,7 +930,20 @@ app.addEventListener('click', (e) => {
 const t = e.target.closest('button');
 if (!t) return;
 const d = t.dataset;
-if (d.sub) { sub = d.sub; render(); return; }
+if (d.sub) { sub = d.sub; if (d.watch) watchOpen = true; render(); return; }
+if (d.mv) { const P = plans[cur]; P.moves = P.moves || {}; P.moves[d.mv] = Number(d.to); save(); render(); return; }
+if (d.mvreset) { const P = plans[cur]; if (P.moves) delete P.moves[d.mvreset]; save(); render(); return; }
+if (d.ics) { downloadIcs(); return; }
+if (d.nutri) { const P = plans[cur]; P.cfg.nutri = !P.cfg.nutri; save(); render(); return; }
+if (d.share) { const c = { ...plans[cur].cfg }, url = shareUrl(c), title = `Plan ${DIST[c.dist].label}${c.name ? ' · ' + c.name : ''}`;
+if (navigator.share) navigator.share({ title, text: 'Mon plan d\'entraînement Prépa Builder', url }).catch(() => {});
+else if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => { t.textContent = 'Lien copié ✓'; }, () => prompt('Copie ce lien :', url));
+else prompt('Copie ce lien :', url); return; }
+if (d.recadd) { const k = document.getElementById('recK').value, tt = parseTime(document.getElementById('recT').value), dd = document.getElementById('recD').value, m = app.querySelector('.rec-msg');
+if (!isFinite(tt) || tt < 600 || !/^\d{4}-\d{2}-\d{2}$/.test(dd)) { m.textContent = 'Format attendu : 45:30 ou 1:52:10.'; m.classList.add('err'); return; }
+const r = store.get('pb.records', {}); r[k] = { t: tt, d: dd }; store.set('pb.records', r); render(); const det = app.querySelector('.records'); if (det) det.open = true; return; }
+if (d.recdel) { const r = store.get('pb.records', {}); delete r[d.recdel]; store.set('pb.records', r); render(); const det = app.querySelector('.records'); if (det) det.open = true; return; }
+if (d.go === 'import') { const l = prompt('Colle le lien du plan partagé :'); if (l) importShared(readShared(l)); return; }
 if (d.wk != null) { weekIdx = Number(d.wk); render(); return; }
 if (d.mo != null) { monthIdx = Number(d.mo); render(); return; }
 if (d.wkgo != null) { weekIdx = Number(d.wkgo); sub = 'week'; render(); window.scrollTo(0, 0); return; }
@@ -714,6 +962,7 @@ if (d.del) { if (t.dataset.confirm) { delete plans[d.del]; if (cur === d.del) cu
 document.getElementById('homeBtn').addEventListener('click', () => { view = 'home'; render(); window.scrollTo(0, 0); });
 document.getElementById('newBtn').addEventListener('click', () => { view = 'new'; render(); window.scrollTo(0, 0); });
 render();
+if (/^#p=/.test(location.hash)) { const c = readShared(location.hash); history.replaceState(null, '', location.pathname + location.search); setTimeout(() => importShared(c), 300); }
 })();
 </script>
 </html>
