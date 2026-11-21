@@ -64,12 +64,16 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .field.full{grid-column:1 / -1}
 .field label,.field .lbl{font-size:13px;font-weight:600;color:var(--text-2)}
 .field small{font-size:12px;color:var(--muted)}
+
 .date-box{position:relative;display:block;width:100%;min-width:0;overflow:hidden;border-radius:11px;border:1px solid var(--border);background:var(--surface-2)}
 .date-box .date-ic{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none}
 .field .date-box input[type=date]{-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:100%;min-width:0;border:0;border-radius:0;background:transparent;text-align:left;line-height:26px;padding-right:40px}
 .field input[type=date]::-webkit-calendar-picker-indicator{opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
 .field input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
 .field input,.field select{min-height:44px;padding:8px 12px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font:inherit;font-size:16px;min-width:0;width:100%}
+.field input:disabled{opacity:.45}
+.chk{display:flex;align-items:center;gap:10px;min-height:40px;font-size:14px;color:var(--text-2);cursor:pointer}
+.field .chk input{width:20px;height:20px;min-height:0;padding:0;margin:0;border-radius:4px;accent-color:var(--accent);flex:none}
 .choice{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border)}
 .choice label{flex:1;position:relative;cursor:pointer}
 .choice input{position:absolute;opacity:0;pointer-events:none}
@@ -380,7 +384,7 @@ desc: kind === 'race' ? 'Blocs à l\'allure de course. Teste ton ravitaillement 
 const SLOTS = { 2: [3, []], 3: [2, [4]], 4: [2, [3, 5]], 5: [2, [1, 3, 5]], 6: [2, [1, 3, 4, 5]] };
 const longDow = cfg.longDay, [qOff, eOffs] = SLOTS[cfg.runs] || SLOTS[3], qDow = (longDow + qOff) % 7;
 const wk = cfg.weekKm || 25, EASY_MIN = wk < 15 ? [35, 30, 30, 30] : wk < 25 ? [40, 35, 30, 30] : wk < 40 ? [45, 40, 35, 30] : [55, 50, 45, 40];
-const maxLong = Math.max(10, Math.min(D.peakLong, Math.floor((3.25 * 3600) / P.long)));
+const maxLong = Math.max(10, Math.min(cfg.first ? Math.round(D.peakLong * 0.9) : D.peakLong, Math.floor((3.25 * 3600) / P.long)));
 let lastLong = Math.max(6, cfg.startLong) - 2, prog = 0, tested = false, prevCap = false;
 const used = { base: 0, build: 0, peak: 0 };
 const weeks = [];
@@ -405,7 +409,7 @@ const lvEff = recovery || wtr < D.taper ? 0 : lv;
 let longKm;
 if (wtr >= D.taper) {
 const cap = Math.min(maxLong, phase === 'base' ? Math.round(D.peakLong * 0.7) : phase === 'build' ? Math.round(D.peakLong * 0.87) : D.peakLong);
-const inc = (cfg.dist === '10k' ? 1 : 2) + lvEff;
+const inc = Math.max(1, (cfg.dist === '10k' ? 1 : 2) - (cfg.first && cfg.dist !== 'marathon' ? 1 : 0)) + lvEff;
 if (recovery) { longKm = Math.max(6, Math.round(lastLong * 0.75)); prevCap = false; }
 else if (lastLong + inc > cap) { longKm = prevCap ? cap - 3 : cap; prevCap = !prevCap; }
 else { longKm = lastLong + inc; lastLong = longKm; prevCap = longKm === cap; }
@@ -417,7 +421,9 @@ if (wtr === 0) q = { title: 'Activation pré-course', desc: 'Juste pour réveill
 else if (wtr < D.taper) q = Q('Rappel allure course', 'Volume réduit, on garde les sensations.', [rep(2, raceS(M(cfg.dist === '10k' ? 1000 : 2000)), 120)]);
 else if (recovery && !tested && phase === 'build' && cfg.dist !== '10k') { q = test10k(); test = tested = true; }
 else if (recovery) q = light();
-else { const list = phase === 'peak' ? lib.peak[cfg.dist] : lib[phase]; q = tune(list[used[phase]++ % list.length], lvEff); }
+else { const list = phase === 'peak' ? lib.peak[cfg.dist] : lib[phase], soft = cfg.first && phase === 'base' && lvEff >= 0;
+q = tune(list[used[phase]++ % list.length], lvEff - (soft ? 1 : 0));
+if (soft && lvEff === 0) q = { ...q, desc: q.desc.replace(' Séance allégée d\'un cran.', ' Version allégée : c\'est ta première sur cette distance.') }; }
 const sessions = [];
 const push = (dow, s) => sessions.push({ ...s, date: addDays(mon, dow) });
 push(qDow, { type: q.type || 'quality', ...q });
@@ -426,12 +432,13 @@ eOffs.forEach((off, i) => push((longDow + off) % 7, easy(EASY_MIN[i] - (recovery
 push(longDow, longRun(longKm, phase, prog % 2 === 1, recovery, wtr));
 } else {
 sessions.push({ ...easy(30), date: addDays(raceDate, -2) });
-sessions.push({ type: 'race', title: `JOUR J · ${D.label}`, date: raceDate, fixedKm: D.km, fixedSec: cfg.goal, desc: `Objectif ${fmtDur(cfg.goal)}, soit ${fmtPace(rp)}/km. Pars 5 s/km plus lent les 2 premiers km.`,
+sessions.push({ type: 'race', title: `JOUR J · ${D.label}`, date: raceDate, fixedKm: D.km, fixedSec: cfg.goal, desc: `${cfg.noGoal ? `Objectif : terminer en forme. Repère : environ ${fmtDur(cfg.goal)}, soit ${fmtPace(rp)}/km.` : `Objectif ${fmtDur(cfg.goal)}, soit ${fmtPace(rp)}/km.`} ${cfg.first ? 'C\'est ta première : pars 10 s/km plus lent les 3 premiers km, bois à chaque ravitaillement et garde des forces pour la fin.' : 'Pars 5 s/km plus lent les 2 premiers km.'}`,
 steps: [run('Départ prudent', M(2000), around(rp + 5, 3)), run('Allure course', M(Math.round((D.km - 2) * 1000)), raceR)] });
 sessions.forEach((s) => { if (s.type === 'quality' && s.date >= raceDate) s.date = addDays(raceDate, -4); });
 }
 sessions.forEach((s) => { const e = estimate(s.steps); s.km = s.fixedKm || Math.round(e.km * 10) / 10; s.sec = s.fixedSec || e.sec; s.id = key(s.date) + '-' + s.type; });
 sessions.sort((a, b) => a.date - b.date);
+if (w === 0 && cfg.startDay) { const from = parse(cfg.startDay); for (let i = sessions.length - 1; i >= 0; i--) if (sessions[i].date < from && sessions[i].type !== 'race') sessions.splice(i, 1); }
 weeks.push({ index: w, monday: mon, wtr, phase, recovery, forced, level: lvEff, why: lvEff || forced ? why : '', test, longKm, km: Math.round(sessions.reduce((a, s) => a + s.km, 0)), sessions });
 }
 return { weeks, P, rp, D, raceDate, maxLong, phases: ['base', 'build', 'peak', 'taper'].map((k) => ({ k, n: weeks.filter((w) => w.phase === k).length })).filter((p) => p.n) };
@@ -486,17 +493,19 @@ app.innerHTML = `
 <section class="card">
 <div class="eyebrow">${edit ? 'Modifier le plan' : 'Nouveau plan'}</div>
 <h1 style="font-size:26px;margin-top:6px">${edit ? esc(c.name || 'Mon plan') : 'Ta course, ton niveau, ton plan'}</h1>
-<p class="sub" style="margin-top:6px">Huit questions. Le plan se calcule tout seul, puis s'ajuste chaque semaine à tes ressentis.</p>
+<p class="sub" style="margin-top:6px">Quelques questions. Le plan se calcule tout seul, puis s'ajuste chaque semaine à tes ressentis.</p>
 <form id="setup" class="form" novalidate>
 <div class="field full"><span class="lbl">Distance</span><div class="choice">${Object.entries(DIST).map(([k, d]) => `<label><input type="radio" name="dist" value="${k}" ${c.dist === k ? 'checked' : ''}><span>${d.label}</span></label>`).join('')}</div></div>
+<div class="field full"><span class="lbl">As-tu déjà couru cette distance ?</span><div class="choice"><label><input type="radio" name="first" value="0" ${c.first ? '' : 'checked'}><span>Oui</span></label><label><input type="radio" name="first" value="1" ${c.first ? 'checked' : ''}><span>Non, ce sera la première</span></label></div><small>Pour une première, la sortie longue monte plus doucement</small></div>
 <div class="field"><label for="f-date">Date de la course</label><span class="date-box"><input id="f-date" name="raceDate" type="date" value="${c.raceDate}" required><span class="date-ic" aria-hidden="true">📅</span></span><small>Entre 6 et 30 semaines</small></div>
-<div class="field"><label for="f-goal">Temps visé</label><input id="f-goal" name="goal" type="text" autocomplete="off" placeholder="1:55:00" value="${isFinite(c.goal) ? fmtDur(c.goal) : ''}"><small>h:mm:ss ou mm:ss</small></div>
+<div class="field"><label for="f-goal">Temps visé</label><input id="f-goal" name="goal" type="text" autocomplete="off" placeholder="1:55:00" value="${isFinite(c.goal) && !c.noGoal ? fmtDur(c.goal) : ''}" ${c.noGoal ? 'disabled' : ''}><label class="chk"><input type="checkbox" name="noGoal" ${c.noGoal ? 'checked' : ''}><span>Je ne vise pas de chrono</span></label></div>
 <div class="field full"><span class="lbl">Ton meilleur chrono récent</span><div class="choice">${Object.entries(REF).map(([k, r]) => `<label><input type="radio" name="refDist" value="${k}" ${(c.refDist || '10k') === k ? 'checked' : ''}><span>${r[1]}</span></label>`).join('')}</div>
 <input id="f-ref" name="refTime" type="text" autocomplete="off" aria-label="Temps réalisé" placeholder="52:30" value="${isFinite(c.refTime ?? c.ref10k) ? fmtDur(c.refTime ?? c.ref10k) : ''}"><small>Une course ou un test couru à fond dans les 2 derniers mois, sur la distance de ton choix. Pas de chrono ? Mets ton estimation honnête. Il sert à calculer toutes tes allures.</small></div>
 <div class="field"><label for="f-km">Tes km par semaine en ce moment</label><input id="f-km" name="weekKm" type="number" inputmode="numeric" min="5" max="150" value="${c.weekKm || 25}"><small>Moyenne des 4 dernières semaines</small></div>
 <div class="field"><label for="f-long">Ta plus longue sortie récente (km)</label><input id="f-long" name="startLong" type="number" inputmode="numeric" min="5" max="30" value="${c.startLong}"></div>
 <div class="field"><span class="lbl">Sorties par semaine</span><div class="choice">${[2, 3, 4, 5, 6].map((r) => `<label><input type="radio" name="runs" value="${r}" ${c.runs === r ? 'checked' : ''}><span>${r}</span></label>`).join('')}</div><small>1 séance de qualité et 1 sortie longue, le reste en footing</small></div>
 <div class="field"><label for="f-day">Jour de la sortie longue</label><select id="f-day" name="longDay">${DOWS.map((d, i) => `<option value="${i}" ${c.longDay === i ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
+${!edit && [0, 5, 6].includes(today.getDay()) ? `<div class="field full"><label class="chk"><input type="checkbox" name="startNow"><span>Commencer dès cette semaine</span></label><small>Sinon le plan démarre lundi. Cette semaine, seules les séances des jours restants sont gardées.</small></div>` : ''}
 <div class="field full"><label for="f-name">Nom du plan</label><input id="f-name" name="pname" type="text" placeholder="Semi de Paris" value="${esc(c.name || '')}"></div>
 </form>
 <div class="form-foot"><button type="submit" form="setup" class="btn primary">${edit ? 'Recalculer le plan' : 'Générer mon plan'}</button>${saved.length ? '<button type="button" class="btn" data-go="plan">Annuler</button>' : '<button type="button" class="btn" data-go="home">Retour</button>'}<span class="err" id="err" role="alert"></span></div>
@@ -511,15 +520,17 @@ ${edit ? '<p class="note" style="margin-top:10px">Tes ressentis déjà notés so
 <li>Tes plans restent sur ce téléphone ou cet ordinateur, personne d'autre ne les voit.</li>
 </ul></details>
 </section>
-${saved.length ? `<section class="card"><h2 style="font-size:17px">Mes plans</h2><div class="saved">${saved.map(([id, p]) => `<div class="saved-row"><div><b>${esc(p.cfg.name || DIST[p.cfg.dist].label)}${p.example ? ' · exemple' : ''}</b><span>${DIST[p.cfg.dist].label} · ${parse(p.cfg.raceDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} · objectif ${fmtDur(p.cfg.goal)}</span></div><button type="button" class="btn sm" data-open="${id}">Ouvrir</button><button type="button" class="btn sm" data-del="${id}" aria-label="Supprimer ce plan">Suppr.</button></div>`).join('')}</div></section>` : ''}`;
+${saved.length ? `<section class="card"><h2 style="font-size:17px">Mes plans</h2><div class="saved">${saved.map(([id, p]) => `<div class="saved-row"><div><b>${esc(p.cfg.name || DIST[p.cfg.dist].label)}${p.example ? ' · exemple' : ''}</b><span>${DIST[p.cfg.dist].label} · ${parse(p.cfg.raceDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} · ${p.cfg.noGoal ? 'sans chrono' : `objectif ${fmtDur(p.cfg.goal)}`}</span></div><button type="button" class="btn sm" data-open="${id}">Ouvrir</button><button type="button" class="btn sm" data-del="${id}" aria-label="Supprimer ce plan">Suppr.</button></div>`).join('')}</div></section>` : ''}`;
 const sf = document.getElementById('setup');
 sf.refTime.placeholder = REF[sf.refDist.value][2];
-sf.addEventListener('change', (e) => { if (e.target.name === 'refDist') sf.refTime.placeholder = REF[e.target.value][2]; });
+sf.addEventListener('change', (e) => { if (e.target.name === 'refDist') sf.refTime.placeholder = REF[e.target.value][2];
+if (e.target.name === 'noGoal') { sf.goal.disabled = e.target.checked; if (e.target.checked) sf.goal.value = ''; } });
 document.getElementById('setup').addEventListener('submit', (e) => {
 e.preventDefault();
 const f = e.target, err = document.getElementById('err');
-const cfg = { name: f.pname.value.trim(), dist: f.dist.value, raceDate: f.raceDate.value, goal: parseTime(f.goal.value), refDist: f.refDist.value, refTime: parseTime(f.refTime.value), weekKm: Math.round(Number(f.weekKm.value) || 0), runs: Number(f.runs.value), longDay: Number(f.longDay.value), startLong: Math.round(Number(f.startLong.value) || 8), start: P ? P.cfg.start : key([0, 5, 6].includes(today.getDay()) ? addDays(monday(today), 7) : monday(today)) };
+const cfg = { name: f.pname.value.trim(), dist: f.dist.value, raceDate: f.raceDate.value, goal: parseTime(f.goal.value), noGoal: f.noGoal.checked, first: f.first.value === '1', refDist: f.refDist.value, refTime: parseTime(f.refTime.value), weekKm: Math.round(Number(f.weekKm.value) || 0), runs: Number(f.runs.value), longDay: Number(f.longDay.value), startLong: Math.round(Number(f.startLong.value) || 8), start: P ? P.cfg.start : key([0, 5, 6].includes(today.getDay()) && !(f.startNow && f.startNow.checked) ? addDays(monday(today), 7) : monday(today)), startDay: P ? P.cfg.startDay : key(today) };
 cfg.ref10k = to10k(cfg.refTime, cfg.refDist);
+if (cfg.noGoal && isFinite(cfg.ref10k)) cfg.goal = Math.round(predict(cfg.ref10k, DIST[cfg.dist].km) * 1.04);
 const weeks = cfg.raceDate ? Math.round((monday(parse(cfg.raceDate)) - monday(parse(cfg.start))) / DAY / 7) + 1 : 0;
 const D = DIST[cfg.dist];
 if (!cfg.raceDate || weeks < 6 || weeks > 30) return void (err.textContent = `La course doit tomber entre 6 et 30 semaines après le début du plan (là : ${weeks || 0}).`);
@@ -538,8 +549,8 @@ const ci = Math.min(plan.weeks.length - 1, Math.max(0, Math.floor((monday(today)
 if (weekIdx == null) weekIdx = ci;
 const W = plan.weeks[weekIdx], curW = plan.weeks[ci];
 const days = Math.round((plan.raceDate - today) / DAY);
-const pred = predict(c.ref10k, D.km), gap = (c.goal - pred) / pred;
-const verdict = gap < -0.04 ? ['bad', 'Très ambitieux', `Ton chrono actuel donne ${fmtDur(pred)} sur ${D.label.toLowerCase()}. Il faut gagner ${fmtDur(pred - c.goal)} d'ici la course.`]
+const pred = predict(c.ref10k, D.km), gap = (c.goal - pred) / pred - (c.first ? 0.02 : 0);
+const verdict = c.noGoal ? ['good', 'Sans chrono', `Objectif : terminer en forme. D'après ton niveau, tu peux finir en environ ${fmtDur(c.goal)}. Ton allure course est un peu plus lente que ton potentiel.`] : gap < -0.04 ? ['bad', 'Très ambitieux', `Ton chrono actuel donne ${fmtDur(pred)} sur ${D.label.toLowerCase()}. Il faut gagner ${fmtDur(pred - c.goal)} d'ici la course.`]
 : gap < -0.01 ? ['warn', 'Ambitieux mais jouable', `Ton chrono actuel donne ${fmtDur(pred)} sur ${D.label.toLowerCase()} : l'objectif demande une vraie progression.`]
 : gap <= 0.03 ? ['good', 'Réaliste', `Ton chrono actuel donne ${fmtDur(pred)} sur ${D.label.toLowerCase()} : l'objectif colle à ton niveau.`]
 : ['good', 'Prudent', `Ton chrono actuel donne ${fmtDur(pred)} sur ${D.label.toLowerCase()} : tu as de la marge, tu pourrais viser plus vite.`];
@@ -593,7 +604,7 @@ body = `<section class="card">
 <span class="vol tnum"><span class="bar"><i style="width:${(w.km / maxKm) * 100}%;background:${phaseVar(w.phase)}"></i></span>${w.km} km</span></button>`).join('')}</div>
 </section>`;
 } else {
-const Pc = plan.P, rows = [['easy', 'Footing', `${fmtPace(Pc.easy - 15)}-${fmtPace(Pc.easy + 15)}`, 'Aisance respiratoire, tu peux parler'], ['long', 'Endurance (sortie longue)', `${fmtPace(Pc.long - 12)}-${fmtPace(Pc.long + 12)}`, 'Un peu plus vite que le footing'], ['quality', 'Seuil', `${fmtPace(Pc.threshold.fast)}-${fmtPace(Pc.threshold.slow)}`, 'Soutenu, tenable environ 1 h'], ['quality', 'Fractionné (allure 5 km)', `${fmtPace(Pc.interval.fast)}-${fmtPace(Pc.interval.slow)}`, 'Dur, répétitions de 3 à 5 min'], ['test', 'VMA', `${fmtPace(Pc.vma.fast)}-${fmtPace(Pc.vma.slow)}`, 'Très vite, répétitions courtes'], ['race', `Allure course (${D.label.toLowerCase()})`, fmtPace(plan.rp), `Objectif ${fmtDur(c.goal)}`]];
+const Pc = plan.P, rows = [['easy', 'Footing', `${fmtPace(Pc.easy - 15)}-${fmtPace(Pc.easy + 15)}`, 'Aisance respiratoire, tu peux parler'], ['long', 'Endurance (sortie longue)', `${fmtPace(Pc.long - 12)}-${fmtPace(Pc.long + 12)}`, 'Un peu plus vite que le footing'], ['quality', 'Seuil', `${fmtPace(Pc.threshold.fast)}-${fmtPace(Pc.threshold.slow)}`, 'Soutenu, tenable environ 1 h'], ['quality', 'Fractionné (allure 5 km)', `${fmtPace(Pc.interval.fast)}-${fmtPace(Pc.interval.slow)}`, 'Dur, répétitions de 3 à 5 min'], ['test', 'VMA', `${fmtPace(Pc.vma.fast)}-${fmtPace(Pc.vma.slow)}`, 'Très vite, répétitions courtes'], ['race', `Allure course (${D.label.toLowerCase()})`, fmtPace(plan.rp), c.noGoal ? `Repère : ${fmtDur(c.goal)}` : `Objectif ${fmtDur(c.goal)}`]];
 body = `<section class="card"><h2 style="font-size:18px">Tes allures d'entraînement</h2><p class="sub">Calculées à partir de ton ${REF[c.refDist || '10k'][1]} en ${fmtDur(c.refTime ?? c.ref10k)}. Refais un chrono et mets-le à jour dans « Modifier le plan » pour les recaler.</p>
 <div class="paces">${rows.map(([t, l, v, n]) => `<div class="pace" style="--c:${typeVar(t)}"><span>${l}</span><b class="tnum">${v}</b><small>/km · ${n}</small></div>`).join('')}</div></section>`;
 }
@@ -602,7 +613,7 @@ ${P.example ? `<div class="example"><span><b>Plan d'exemple.</b> Un semi fictif,
 <section class="card hero">
 <div>
 <div class="eyebrow">${D.label} · ${plan.raceDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
-<h1>${esc(c.name || 'Mon plan')}</h1><p class="sub" style="font-size:15px;margin-top:2px">Objectif ${fmtDur(c.goal)}</p>
+<h1>${esc(c.name || 'Mon plan')}</h1><p class="sub" style="font-size:15px;margin-top:2px">${c.noGoal ? 'Objectif : terminer en forme' : `Objectif ${fmtDur(c.goal)}`}</p>
 <div class="kv tnum"><div><b>${days >= 0 ? 'J-' + days : 'Fini'}</b><span>avant la course</span></div><div><b>${plan.weeks.length}</b><span>semaines de plan</span></div><div><b>${fmtPace(plan.rp)}</b><span>allure course /km</span></div></div>
 <div class="phase-pill" style="--ph:${phaseVar(curW.phase)}"><i></i>Phase <b>${PHASE[curW.phase]}</b> · semaine ${ci + 1}</div>
 </div>
